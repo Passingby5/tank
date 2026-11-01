@@ -1,6 +1,6 @@
 // Headless sims of many games. Run: node tests/sim.js
 const assert = require('assert'), E = require('../src/engine.js'), { makeBot } = require('./bot.js');
-const F = 1 / 60; let maxStuck = 0, games = 0, t0 = Date.now();
+const F = 1 / 60, ok2 = m => console.log('ok', m); let maxStuck = 0, games = 0, t0 = Date.now();
 function watchStuck(g, mem) {
   for (const e of g.enemies) { if (!e.alive || e.spawning) continue; const m = mem.get(e.id) || { x: e.x, y: e.y, t: 0 }; if (g.freezeT > 0 || Math.abs(m.x - e.x) + Math.abs(m.y - e.y) > 0.05) { m.x = e.x; m.y = e.y; m.t = 0; } else m.t += F; mem.set(e.id, m); if (m.t > maxStuck) maxStuck = m.t; }
 }
@@ -24,17 +24,18 @@ let birdLost = 0, idleGames = 0;
 for (let L = 0; L < E.LEVELS.length; L++) for (let s = 0; s < 3; s++) { const g = play(L, 'medium', L * 97 + s, 'idle'); idleGames++; if (g.reason === 'bird') birdLost++; }
 assert(birdLost / idleGames >= 0.8, 'bird attacked in only ' + birdLost + '/' + idleGames);
 console.log('ok with the player parked (shielded) and nobody defending, enemies reached and hit the bird in ' + birdLost + '/' + idleGames + ' games');
-// bot without aids, for information on fairness
-let wins = { easy: 0, medium: 0, hard: 0 }, tries = 0;
-for (const diff of ['easy', 'medium', 'hard']) for (let L = 0; L < E.LEVELS.length; L += 3) { const g = play(L, diff, 7 + L, 'bot'); if (diff === 'easy') tries++; if (g.status === 'won') wins[diff]++; }
-console.log('info: plain bot (no aids) wins ' + wins.easy + '/' + tries + ' Easy, ' + wins.medium + '/' + tries + ' Medium, ' + wins.hard + '/' + tries + ' Hard sample levels');
-const med = d => { const ts = []; for (let L = 0; L < E.LEVELS.length; L++) { const g = play(L, d, 300 + L, 'idle'); ts.push(g.status === 'play' ? 400 : g.t); } ts.sort((a, b) => a - b); return ts[ts.length >> 1]; };
-const sw = {}; for (const d of ['easy', 'medium', 'hard']) { sw[d] = 0; for (let L = 0; L < E.LEVELS.length; L++) if (play(L, d, 50 + L, 'shield').status === 'won') sw[d]++; }
-assert(sw.easy >= 12 && sw.easy > sw.medium && sw.medium >= sw.hard, 'bird defense ' + JSON.stringify(sw));
-console.log('ok bird defense: a bot with only a shield (the bird is NOT protected) defends and wins ' + sw.easy + '/22 Easy, ' + sw.medium + '/22 Medium, ' + sw.hard + '/22 Hard');
-const md = { easy: med('easy'), medium: med('medium'), hard: med('hard') };
-assert(md.easy > md.medium && md.medium > md.hard, 'difficulty order ' + JSON.stringify(md));
-console.log('ok difficulty order: an undefended bird lasts ' + md.easy.toFixed(0) + ' s on Easy, ' + md.medium.toFixed(0) + ' s on Medium, ' + md.hard.toFixed(0) + ' s on Hard (median)');
+// Difficulty gates (QA v1 MAJ-1). Kid = slow, sloppy player model; Pro = dodging player model. No test aids.
+const { winRate } = require('./players.js'), L5 = [0, 1, 2, 3, 4], ALL = E.LEVELS.map((_, i) => i);
+const ek = winRate(L5, 'easy', 'kid', 20), ea = winRate(ALL, 'easy', 'kid', 3), mk = winRate(L5, 'medium', 'kid', 10), mp = winRate(ALL, 'medium', 'pro', 3), hp5 = winRate(L5, 'hard', 'pro', 10), hp = winRate(ALL, 'hard', 'pro', 3);
+const pc = r => (r.win * 100).toFixed(0) + '% (' + r.n + ' games, bird lost ' + (r.bird * 100).toFixed(0) + '%)';
+console.log('info: Easy all levels kid ' + pc(ea));
+assert(ek.win >= 0.5, 'Kid must win at least 50% of Easy L1-5'); ok2('Kid player model wins ' + pc(ek) + ' of Easy L1-5 (gate 50%)');
+assert(mk.win >= 0.25 && mp.win >= 0.08, 'Medium must be beatable'); ok2('Medium is beatable: kid ' + pc(mk) + ' on L1-5, pro ' + pc(mp) + ' on all levels');
+assert(hp5.win >= 0.03 && hp5.win < 0.5 && hp.win < mp.win, 'Hard must be challenging but possible'); ok2('Hard is challenging: pro wins ' + pc(hp5) + ' on L1-5 and ' + pc(hp) + ' overall');
+// the bird must not fall faster than a level can possibly end (undefended, player parked with a shield)
+for (const d of ['easy', 'medium', 'hard']) { const D = E.DIFF[d], minLevel = (D.count - D.max) * D.spawn; let worst = 1e9;
+  for (let L = 0; L < E.LEVELS.length; L++) for (let s = 0; s < 3; s++) { const g = E.newGame({ level: L, difficulty: d, seed: L * 9 + s }); for (let i = 0; i < 60 * 600 && g.status === 'play'; i++) { g.players[0].shieldT = 5; E.step(g, [{}], F); } worst = Math.min(worst, g.status === 'play' ? 600 : g.t); }
+  assert(worst >= minLevel, d + ': bird fell at ' + worst.toFixed(0) + ' s, a level needs ' + minLevel.toFixed(0) + ' s'); ok2(d + ': even undefended, the bird lasts at least ' + worst.toFixed(0) + ' s; the fastest possible level takes ' + minLevel.toFixed(0) + ' s'); }
 // 13. no stuck enemies
 assert(maxStuck < 6, 'an enemy stayed stuck for ' + maxStuck.toFixed(1) + ' s');
 console.log('ok no enemy stuck in place for 6 s or more across ' + games + ' games (longest stop ' + maxStuck.toFixed(2) + ' s)');

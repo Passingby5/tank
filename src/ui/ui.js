@@ -21,28 +21,31 @@
   // ---------- layout: everything placed by measured boxes so nothing overlaps ----------
   var lay = {};
   function place(el, x, y, w, h) { el.style.left = Math.round(x) + 'px'; el.style.top = Math.round(y) + 'px'; el.style.width = Math.round(w) + 'px'; el.style.height = Math.round(h) + 'px'; }
-  function placePad(id, x, y, s) { var p = $(id), a = s / 3; place(p, x, y, s, s); var g = a * 0.06, pos = { u: [a, 0], l: [0, a], r: [2 * a, a], d: [a, 2 * a] }; [].forEach.call(p.children, function (arm) { var q = pos[arm.dataset.d]; place(arm, q[0] + g, q[1] + g, a - 2 * g, a - 2 * g); }); }
+  function placePad(id, x, y, s) { var p = $(id), a = s / 3; place(p, x, y, s, s); var g = a * 0.03, pos = { u: [a, 0], l: [0, a], r: [2 * a, a], d: [a, 2 * a] }; [].forEach.call(p.children, function (arm) { var q = pos[arm.dataset.d]; place(arm, q[0] + g, q[1] + g, a - 2 * g, a - 2 * g); }); }
+  var PAD_MIN = 180; // D-pad arms stay at least 56 px at every size (arm = 0.94 x pad / 3)
   function layout() {
-    var vw = root.innerWidth, vh = root.innerHeight, hud = 52, two = st.twoP, land = vw > vh;
-    document.body.classList.toggle('two', two && touch); document.body.classList.toggle('landscape', land);
-    $('rotate').classList.toggle('hidden', !(two && touch && !land));
+    var vw = root.innerWidth, vh = root.innerHeight, hud = 52, two = st.twoP, land = vw > vh, dpr = Math.min(3, root.devicePixelRatio || 1);
+    st.blocked = !!(two && touch && !land); // 2 players on a phone needs landscape: the game waits behind the message
+    document.body.classList.toggle('two', two && touch); document.body.classList.toggle('landscape', land); document.body.classList.toggle('blocked', st.blocked);
+    $('rotate').classList.toggle('hidden', !st.blocked);
     var top = hud + 6, availH = vh - top - 6, board, bx, by;
-    if (!touch) { board = Math.min(vw - 16, availH); bx = (vw - board) / 2; by = top; }
+    if (!touch || st.blocked) { board = Math.min(vw - 16, availH); bx = (vw - board) / 2; by = top; }
     else if (land) {
-      var sideMin = two ? 150 : 140; board = Math.max(150, Math.min(availH, vw - 2 * sideMin)); bx = (vw - board) / 2; by = top + (availH - board) / 2;
+      var side = PAD_MIN + 14; board = Math.max(120, Math.min(availH, vw - 2 * side)); bx = (vw - board) / 2; by = top + (availH - board) / 2;
       var sw = bx - 8, sh = availH;
-      if (!two) { var ds = Math.min(sw - 12, sh - 12, 210), fs = Math.min(sw * 0.72, sh * 0.5, 140); placePad('dpad0', 6 + (sw - ds) / 2, top + (sh - ds) / 2, ds); place($('fire0'), vw - 6 - sw + (sw - fs) / 2, top + (sh - fs) / 2, fs, fs); }
-      else { var d2 = Math.min(sw - 12, sh * 0.62, 180), f2 = Math.max(54, Math.min(sh - d2 - 18, sw * 0.6, 96)), gy = top + (sh - d2 - f2 - 8) / 2;
+      if (!two) { var ds = Math.max(PAD_MIN, Math.min(sw - 12, sh - 12, 210)), fs = Math.min(sw * 0.72, sh * 0.5, 140); placePad('dpad0', 6 + (sw - ds) / 2, top + (sh - ds) / 2, ds); place($('fire0'), vw - 6 - sw + (sw - fs) / 2, top + (sh - fs) / 2, fs, fs); }
+      else { var d2 = Math.max(PAD_MIN, Math.min(sw - 12, sh - 70, 186)), f2 = Math.max(54, Math.min(sh - d2 - 14, sw * 0.5, 96)), gy = top + (sh - d2 - f2 - 8) / 2;
         placePad('dpad0', 6 + (sw - d2) / 2, gy, d2); place($('fire0'), 6 + (sw - f2) / 2, gy + d2 + 8, f2, f2);
         placePad('dpad1', vw - 6 - sw + (sw - d2) / 2, gy, d2); place($('fire1'), vw - 6 - sw + (sw - f2) / 2, gy + d2 + 8, f2, f2); }
     } else {
-      board = Math.min(vw - 8, availH - 170); bx = (vw - board) / 2; by = top;
+      board = Math.min(vw - 8, availH - PAD_MIN - 22); bx = (vw - board) / 2; by = top;
       var cy = by + board + 10, ch = vh - cy - 8;
-      if (!two) { var ps = Math.min(ch - 8, vw * 0.52, 210), fb = Math.min(ch * 0.75, vw * 0.34, 136); placePad('dpad0', Math.max(8, vw * 0.04), cy + (ch - ps) / 2, ps); place($('fire0'), vw - Math.max(10, vw * 0.06) - fb, cy + (ch - fb) / 2, fb, fb); }
-      else { var hw = vw / 2, fq = Math.min(64, hw * 0.34), pq = Math.min(ch - 40, hw - fq - 14); placePad('dpad0', 4, cy + (ch - pq) / 2, pq); place($('fire0'), 4 + pq + 4, cy + (ch - fq) / 2, fq, fq); placePad('dpad1', vw - 4 - pq, cy + (ch - pq) / 2, pq); place($('fire1'), vw - 8 - pq - fq, cy + (ch - fq) / 2, fq, fq); }
+      var ps = Math.max(PAD_MIN, Math.min(ch - 8, vw * 0.54, 210)), fb = Math.min(ch * 0.75, vw - ps - 34, 136); placePad('dpad0', Math.max(8, vw * 0.04), cy + (ch - ps) / 2, ps); place($('fire0'), vw - Math.max(10, vw * 0.05) - fb, cy + (ch - fb) / 2, fb, fb);
     }
-    R.resize(board); var c = $('cv'); c.style.left = Math.round(bx) + 'px'; c.style.top = Math.round(by) + 'px';
-    lay = { board: board, land: land };
+    var css = R.resize(board), c = $('cv');
+    // snap the canvas to whole device pixels so fractional DPR screens stay crisp
+    c.style.left = Math.round((bx + (board - css) / 2) * dpr) / dpr + 'px'; c.style.top = Math.round((by + (board - css) / 2) * dpr) / dpr + 'px';
+    lay = { board: css, land: land, blocked: st.blocked };
   }
   root.addEventListener('resize', function () { if (st.screen === 'play' || st.screen === 'ov') layout(); });
 
@@ -96,6 +99,10 @@
   }
   TK.UI_DEBUG = { pads: pads, padDir: padDir };
 
+  // Back button (Android / browser): during a game it pauses instead of leaving.
+  var hist = false;
+  function guardBack() { if (!hist && root.history && history.pushState) { try { history.pushState({ tk: 1 }, ''); hist = true; } catch (e) { } } }
+  root.addEventListener('popstate', function () { hist = false; if (st.g && (st.screen === 'play' || st.screen === 'ov')) { if (st.screen === 'play' && !st.paused) pause(); guardBack(); } });
   // ---------- buttons (debounced) ----------
   var lastTap = 0;
   document.addEventListener('click', function (e) {
@@ -105,7 +112,7 @@
   function act(a, v) {
     switch (a) {
       case 'play': var two = v === '2'; startLevel(0, null, two, data.settings.difficulty, 0); break;
-      case 'continue': if (data.run) { data.settings.difficulty = data.run.difficulty; startLevel(data.run.level, data.run.carry, data.run.twoP, data.run.difficulty, data.run.attempt); } break;
+      case 'continue': if (data.run) { data.settings.difficulty = data.run.difficulty; var rg = data.run.snap ? E.restore(data.run.snap) : null; if (rg && rg.level === data.run.level) { st.twoP = rg.twoP; st.g = rg; st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start'); } else startLevel(data.run.level, data.run.carry, data.run.twoP, data.run.difficulty, data.run.attempt); } break;
       case 'diff': data.settings.difficulty = v; save(); refreshHome(); break;
       case 'mute': data.settings.muted = !data.settings.muted; save(); refreshMute(); break;
       case 'help': show('help'); break;
@@ -121,8 +128,8 @@
     st.twoP = twoP; attempt = attempt || 0;
     var seed = (level + 1) * 7919 + attempt * 104729 + (twoP ? 13 : 0);
     st.g = E.newGame({ level: level, difficulty: diff, twoP: twoP, carry: carry, seed: seed });
-    data.run = { level: level, difficulty: st.g.diff, twoP: twoP, attempt: attempt, carry: E.carry(st.g) }; save();
-    st.paused = false; st.handled = false; keys = [[], []]; show('play'); A.sfx('start');
+    data.run = { level: level, difficulty: st.g.diff, twoP: twoP, attempt: attempt, carry: E.carry(st.g), snap: null }; save();
+    st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start');
   }
   function overlay(title, text, btns) {
     $('ovTitle').textContent = title; $('ovText').textContent = text; var box = $('ovBtns'); box.innerHTML = '';
@@ -132,9 +139,11 @@
   function pause() {
     if (!st.g || st.g.status !== 'play' || st.paused) return; st.paused = true; A.music(false);
     // save progress: the level you are on with the lives, gun and score you started it with
-    save();
-    overlay('Paused', 'Your game is saved. Level ' + (st.g.level + 1) + ': ' + st.g.name + '.', [['Resume', 'resume', 'big'], ['Restart Level', 'restart'], ['Home', 'home', 'back']]);
+    saveHere();
+    overlay('Paused', 'Saved right here. Level ' + (st.g.level + 1) + ': ' + st.g.name + '.', [['Resume', 'resume', 'big'], ['Restart Level', 'restart'], ['Home', 'home', 'back']]);
   }
+  function saveHere() { if (st.g && st.g.status === 'play' && data.run) { data.run.snap = E.snapshot(st.g); data.run.carry = E.carry(st.g); } save(); }
+  root.addEventListener('pagehide', function () { if (st.g) saveHere(); });
   function resume() { if (!st.g) { st.paused = false; show('home'); return; } st.paused = false; show('play'); }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && st.screen === 'play') pause(); });
   function outcome() {
@@ -143,10 +152,10 @@
     if (g.status === 'won') {
       A.sfx('win');
       if (g.level + 1 >= E.LEVELS.length) { data.run = null; save(); overlay('You won!', 'You cleared all ' + E.LEVELS.length + ' levels and kept the bird safe. Score: ' + score + '. Great teamwork!', [['Play Again', 'play', 'big'], ['Home', 'home', 'back']]); return; }
-      data.run = { level: g.level + 1, difficulty: g.diff, twoP: g.twoP, attempt: 0, carry: E.carry(g) }; save();
+      data.run = { level: g.level + 1, difficulty: g.diff, twoP: g.twoP, attempt: 0, carry: E.carry(g), snap: null }; save();
       overlay('Level Clear!', g.name + ' is safe. Score: ' + score + '.', [['Next Level', 'next', 'big'], ['Home', 'home', 'back']]);
     } else {
-      A.sfx('lose'); save();
+      A.sfx('lose'); if (data.run) data.run.snap = null; save();
       overlay(g.reason === 'bird' ? 'The bird was hit!' : 'Out of tanks!', 'Nice try! Try level ' + (g.level + 1) + ' again with full lives.', [['Try Again', 'retry', 'big'], ['Home', 'home', 'back']]);
     }
   }
@@ -157,29 +166,33 @@
     var l = 'L' + (g.level + 1), m = '<span class="chip" title="Enemies left">&#9632; ' + E.remaining(g) + '</span>';
     g.players.forEach(function (p, i) { m += '<span class="chip p' + i + '">' + (g.twoP ? 'P' + (i + 1) + ' ' : '') + '&#9829;' + Math.max(0, p.lives) + (p.tier ? ' &#9733;' + p.tier : '') + '</span>'; });
     var sc = g.players.reduce(function (s, p) { return s + p.score; }, 0);
+    if (g.birdMax > 1) m += '<span class="chip bird" title="Bird">Bird ' + g.birdHp + '</span>';
     m += '<span class="chip">' + sc + '</span>';
     if (l !== lastHud[0]) { $('hudL').innerHTML = '<span class="chip">' + l + '</span>'; lastHud[0] = l; }
     if (m !== lastHud[1]) { $('hudM').innerHTML = m; lastHud[1] = m; }
   }
   var lastHud = ['', ''];
   // ---------- loop ----------
-  var lastT = 0, acc = 0, STEP = 1 / 60;
+  var lastT = 0, acc = 0, STEP = 1 / 60, slow = 0;
   function loop(t) {
     requestAnimationFrame(loop); var dt = Math.min(0.1, (t - (lastT || t)) / 1000); lastT = t; st.frames++;
     var g = st.g; if (!g || (st.screen !== 'play' && st.screen !== 'ov')) return;
-    if (!st.paused) { acc += dt; var n = 0; while (acc >= STEP && n++ < 6) { E.step(g, inputs(), STEP); R.onEvents(g); sounds(g); acc -= STEP; } if (acc > STEP) acc = 0; }
-    R.frame(g, st.paused ? 0 : dt, st.paused); updateHud(); outcome();
+    if (!st.paused && !st.blocked) { acc += dt; var n = 0; while (acc >= STEP && n++ < 6) { E.step(g, inputs(), STEP); R.onEvents(g); sounds(g); acc -= STEP; } if (acc > STEP) acc = 0; }
+    R.frame(g, st.paused || st.blocked ? 0 : dt, st.paused || st.blocked);
+    // Slow device guard: if frames stay slow for about 2 s, draw at 2x instead of 3x (still sharp), then at 1.5x.
+    if (!st.paused && dt > 0) { slow = slow * 0.97 + (dt > 0.024 ? 0.03 : 0); if (slow > 0.6 && R.stats().maxDpr > 1.5) { R.setMaxDpr(R.stats().maxDpr > 2 ? 2 : 1.5); slow = 0; layout(); } } updateHud(); outcome();
   }
   // ---------- init ----------
   $('ver').textContent = TK_BUILD.label;
   R.setup($('cv'));
+  if (root.matchMedia) { var rm = root.matchMedia('(prefers-reduced-motion: reduce)'); R.setReduce(rm.matches); if (rm.addEventListener) rm.addEventListener('change', function () { R.setReduce(rm.matches); }); }
   (function logo() { var c = $('logoArt'), d = Math.min(3, root.devicePixelRatio || 1), s = 132; c.width = c.height = s * d; c.style.width = c.style.height = s + 'px'; var x = c.getContext('2d');
     R.drawBird(x, s * d * 0.3, s * d * 0.5, s * d * 0.4, true, 0); R.drawTank(x, s * d * 0.02, s * d * 0.06, s * d * 0.46, 'r', 'p0', 0); R.drawTank(x, s * d * 0.54, s * d * 0.04, s * d * 0.44, 'l', 'p1', 0); })();
   var names = { star: 'Star: better gun', shield: 'Shield', shovel: 'Shovel: steel fort', bomb: 'Bomb: clears enemies', clock: 'Clock: freeze', tank: 'Tank: extra life' };
   E.POWERS.forEach(function (k) { var d = document.createElement('div'), c = document.createElement('canvas'); R.drawIcon(c, k, 30); d.appendChild(c); d.appendChild(document.createTextNode(names[k])); $('powerList').appendChild(d); });
   ['b', 'f', 'r', 'a'].forEach(function (k) { var d = document.createElement('div'), c = document.createElement('canvas'); R.drawIcon(c, k, 30); d.appendChild(c); d.appendChild(document.createTextNode(E.TYPES[k].name + (k === 'a' ? ' (4 hits)' : ''))); $('foeList').appendChild(d); });
   show('home'); requestAnimationFrame(loop);
-  TK.UI = { state: function () { var g = st.g; return { screen: st.screen, paused: st.paused, frames: st.frames, save: data, status: g && g.status, level: g && g.level, twoP: st.twoP,
+  TK.UI = { state: function () { var g = st.g; return { inGame: !!g && (st.screen === 'play' || st.screen === 'ov'), blocked: !!st.blocked, screen: st.screen, paused: st.paused, frames: st.frames, save: data, status: g && g.status, level: g && g.level, twoP: st.twoP,
       player: g && { x: g.players[0].x, y: g.players[0].y, dir: g.players[0].dir, alive: g.players[0].alive, tier: g.players[0].tier, lives: g.players[0].lives }, render: R.stats(), muted: data.settings.muted, layout: lay, audio: A.state() }; },
     game: function () { return st.g; }, save: save, start: startLevel };
 })(this);

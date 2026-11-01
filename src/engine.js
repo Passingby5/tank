@@ -15,13 +15,15 @@
     r: { name: 'Rapid-fire', speed: 2.4, hp: 1, fire: 0.75, bullet: 13, maxB: 2, score: 300 },
     a: { name: 'Armored', speed: 1.9, hp: 4, fire: 1.5, bullet: 9, maxB: 1, score: 400 }
   };
+  // Tuned after QA v1: kid-friendly Easy, beatable Medium, challenging Hard. bird = hits the bird can take.
+  // fire = enemy fire interval multiplier, bullet = enemy bullet speed multiplier.
   var DIFF = {
-    easy: { count: 15, lives: 5, speed: 0.85, fire: 1.8, max: 3, chase: 0.12, spawn: 3.4, aim: 0.15, aimBird: false, fortStart: 25 },
-    medium: { count: 20, lives: 3, speed: 1, fire: 1.45, max: 4, chase: 0.18, spawn: 3.0, aim: 0.3, aimBird: false },
-    hard: { count: 20, lives: 3, speed: 1.1, fire: 1.0, max: 4, chase: 0.3, spawn: 2.3, aim: 0.5, aimBird: true }
+    easy: { count: 15, lives: 5, speed: 0.75, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 90, bird: 3 },
+    medium: { count: 18, lives: 5, speed: 0.9, fire: 2.0, bullet: 0.85, max: 3, chase: 0.1, spawn: 2.6, aim: 0.1, aimBird: false, fortStart: 45, bird: 2 },
+    hard: { count: 20, lives: 4, speed: 1.0, fire: 1.4, bullet: 0.95, max: 4, chase: 0.2, spawn: 2.4, aim: 0.3, aimBird: true, fortStart: 42, bird: 2 }
   };
   var POWERS = ['star', 'shield', 'shovel', 'bomb', 'clock', 'tank'];
-  var BONUS_AT = [3, 10, 17];
+  var BONUS_RANGES = [[1, 5], [7, 11], [13, 16]]; // one flashing tank is picked at random inside each range
   var PLAYER_SPEED = 3.3, EPS = 1e-6;
 
   function rng(g) { var t = g.seed = (g.seed + 0x6D2B79F5) | 0; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }
@@ -56,7 +58,9 @@
     for (var i = q.length - 1; i > 0; i--) { var j = Math.floor(rng(g) * (i + 1)), t = q[i]; q[i] = q[j]; q[j] = t; }
     // armored tanks lean toward the back of the line so the level ramps up
     q.sort(function (a, b) { return (a === 'a') - (b === 'a'); }); for (i = 0; i < q.length - 1; i++) if (rng(g) < 0.35) { t = q[i]; q[i] = q[i + 1]; q[i + 1] = t; }
-    g.queue = q;
+    g.queue = q; g.bonusAt = BONUS_RANGES.map(function (r) { return Math.min(q.length - 1, r[0] + Math.floor(rng(g) * (r[1] - r[0] + 1))); });
+    g.ramp = 1 + Math.max(0, 5 - lvIdx) * 0.08; g.rampSpeed = 1 - Math.max(0, 5 - lvIdx) * 0.025; // levels 1-5 are gentler
+    g.birdHp = D.bird; g.birdMax = D.bird; g.birdHitT = 0;
     var carry = o.carry || [];
     for (var p = 0; p < (g.twoP ? 2 : 1); p++) {
       var c = carry[p] || {};
@@ -91,11 +95,18 @@
     return 0;
   }
   // Gentle grid alignment when turning: snap the cross axis to the nearest half tile, only if close and the spot is free.
+  // Gentle grid alignment when turning. First choice: the closest half-tile spot within 0.45 tile (players) where the
+  // tank fits AND the lane in the new direction is open, so a slightly early or late press still enters a corridor.
+  // Otherwise: snap to the nearest half tile if within 0.3 and free. Never moves into a wall or another tank.
   function turn(g, t, dir) {
     if (t.dir === dir) return;
-    var horizNow = DIRS[dir][0] !== 0;
-    if (horizNow) { var sy = Math.round(t.y * 2) / 2; if (Math.abs(sy - t.y) <= 0.3 && free(g, t, t.x, sy)) t.y = sy; }
-    else { var sx = Math.round(t.x * 2) / 2; if (Math.abs(sx - t.x) <= 0.3 && free(g, t, sx, t.y)) t.x = sx; }
+    var v = DIRS[dir], horizNow = v[0] !== 0, wide = t.kind === 'player' ? 0.45 : 0.3;
+    var cur = horizNow ? t.y : t.x, base = Math.round(cur * 2) / 2, cands = [];
+    for (var k = -2; k <= 2; k++) { var c = base + k / 2, d = Math.abs(c - cur); if (d <= wide + 1e-9) cands.push([d, c]); }
+    cands.sort(function (a, b) { return a[0] - b[0]; });
+    var at = function (c) { return horizNow ? [t.x, c] : [c, t.y]; }, done = false;
+    for (var i = 0; i < cands.length && !done; i++) { var q = at(cands[i][1]); if (free(g, t, q[0], q[1]) && free(g, t, q[0] + v[0] * 0.3, q[1] + v[1] * 0.3)) { t.x = q[0]; t.y = q[1]; done = true; } }
+    if (!done && cands.length && cands[0][0] <= 0.3) { var n = at(cands[0][1]); if (free(g, t, n[0], n[1])) { t.x = n[0]; t.y = n[1]; } }
     t.dir = dir;
   }
   function onIce(g, t) { var cx = Math.floor((t.x + 0.5) * 2), cy = Math.floor((t.y + 0.5) * 2); return g.map[cy] && (g.map[cy][cx] === ICE || g.map[cy][Math.max(0, cx - 1)] === ICE); }
@@ -120,7 +131,7 @@
       if (qx >= 0 && qy >= 0 && qx < H && qy < H) { var val = g.map[qy][qx]; if (val === BRICK || val === STEEL || val === BASE) hitCells.push([qx, qy, val]); }
     }
     if (!hitCells.length) return false;
-    if (hitCells.some(function (c) { return c[2] === BASE; })) { if (b.side === 'e') killBird(g, b.side); else g.events.push({ t: 'clank', x: b.x, y: b.y, side: b.side }); return true; }
+    if (hitCells.some(function (c) { return c[2] === BASE; })) { if (b.side === 'e') hitBird(g, b.side); else g.events.push({ t: 'clank', x: b.x, y: b.y, side: b.side }); return true; }
     // impact strip one tile wide, centered on the bullet; power shots go two rows deep and break steel
     var rows = b.power ? 2 : 1, broke = false, steel = false;
     for (var r = 0; r < rows; r++) {
@@ -139,6 +150,7 @@
     if (steel && !broke) g.events.push({ t: 'clank', x: b.x, y: b.y, side: b.side });
     return true;
   }
+  function hitBird(g, side) { if (!g.birdAlive) return; g.birdHp--; g.birdHitT = 0.6; if (g.birdHp > 0) { g.events.push({ t: 'birdhit', x: 6.5, y: 12.5 }); return; } killBird(g, side); }
   function killBird(g, side) { g.birdBy = side; if (!g.birdAlive) return; g.birdAlive = false; g.events.push({ t: 'bird', x: 6.5, y: 12.5 }); g.events.push({ t: 'boom', x: 6.5, y: 12.5, big: true }); if (g.status === 'play') { g.status = 'lost'; g.reason = 'bird'; g.endT = 0; } }
   function inBox(b, t) { return b.x > t.x - 0.08 && b.x < t.x + 1.08 && b.y > t.y - 0.08 && b.y < t.y + 1.08; }
 
@@ -162,7 +174,7 @@
     p.score += 500; g.events.push({ t: 'pickup', kind: k, x: p.x + 0.5, y: p.y + 0.5, id: p.id });
     if (k === 'star') p.tier = Math.min(3, p.tier + 1);
     else if (k === 'shield') p.shieldT = Math.max(p.shieldT, 10);
-    else if (k === 'shovel') { g.shovelT = 16; setFort(g, STEEL); }
+    else if (k === 'shovel') { g.shovelT = Math.max(g.shovelT, 16); setFort(g, STEEL); }
     else if (k === 'bomb') g.enemies.forEach(function (e) { if (e.alive && !e.spawning) killEnemy(g, e, p); });
     else if (k === 'clock') g.freezeT = 9;
     else if (k === 'tank') p.lives = Math.min(9, p.lives + 1);
@@ -173,7 +185,7 @@
       var gi = (g.gate + k) % 3, s = GATES[gi], x = s[0], y = s[1], probe = { x: -9, y: -9 };
       if (!free(g, probe, x, y)) continue;
       var type = g.queue[g.spawned], T = TYPES[type];
-      g.enemies.push({ id: g.nextId++, kind: 'enemy', type: type, x: x, y: y, dir: 'd', hp: T.hp, maxHp: T.hp, alive: true, spawning: 1.0, bonus: BONUS_AT.indexOf(g.spawned) >= 0,
+      g.enemies.push({ id: g.nextId++, kind: 'enemy', type: type, x: x, y: y, dir: 'd', hp: T.hp, maxHp: T.hp, alive: true, spawning: 1.0, bonus: g.bonusAt.indexOf(g.spawned) >= 0,
         think: 0.5, cool: 0.8 + rng(g) * T.fire, stuckT: 0, lx: x, ly: y, tread: 0, moving: false, hitT: 0 });
       g.spawned++; g.gate = (gi + 1) % 3; g.events.push({ t: 'spawn', x: x + 0.5, y: y + 0.5 });
       return true;
@@ -197,7 +209,7 @@
     var T = TYPES[e.type], D = g.D;
     if (g.freezeT > 0) { e.moving = false; return; }
     e.think -= dt; e.cool -= dt;
-    var moved = move(g, e, e.dir, T.speed * D.speed * dt); e.moving = moved > 0; if (moved) e.tread += moved;
+    var moved = move(g, e, e.dir, T.speed * D.speed * g.rampSpeed * dt); e.moving = moved > 0; if (moved) e.tread += moved;
     if (Math.abs(e.x - e.lx) + Math.abs(e.y - e.ly) > 0.05) { e.stuckT = 0; e.lx = e.x; e.ly = e.y; } else e.stuckT += dt;
     var aligned = Math.abs(e.x * 2 - Math.round(e.x * 2)) < 0.03 && Math.abs(e.y * 2 - Math.round(e.y * 2)) < 0.03 && Math.abs(e.x - Math.round(e.x)) < 0.03 && Math.abs(e.y - Math.round(e.y)) < 0.03;
     if (!moved) {
@@ -213,12 +225,13 @@
       var targets = (D.aimBird ? [{ x: BASEPOS[0], y: BASEPOS[1] }] : []).concat(g.players.filter(function (p) { return p.alive; }));
       targets.forEach(function (t) { if (Math.abs(t.x - e.x) < 0.4) turn(g, e, t.y > e.y ? 'd' : 'u'); else if (Math.abs(t.y - e.y) < 0.4) turn(g, e, t.x > e.x ? 'r' : 'l'); });
     }
-    if (e.cool <= 0 && e.spawnSafe <= 0) { fire(g, e, T.bullet, false, T.maxB); e.cool = T.fire * D.fire * (0.6 + rng(g) * 0.8); }
+    if (e.cool <= 0 && e.spawnSafe <= 0) { fire(g, e, T.bullet * D.bullet, false, T.maxB); e.cool = T.fire * D.fire * g.ramp * (0.6 + rng(g) * 0.8); }
   }
 
   // inputs: [{ dir: 'u'|'d'|'l'|'r'|null, fire: bool }, ...]
   function step(g, inputs, dt) {
     g.events = []; dt = dt || 1 / 60; inputs = inputs || [];
+    if (g.birdHitT > 0) g.birdHitT -= dt;
     if (g.status !== 'play') { g.endT += dt; stepBullets(g, dt); return g; }
     g.t += dt;
     if (g.freezeT > 0) g.freezeT = Math.max(0, g.freezeT - dt);
@@ -279,11 +292,44 @@
     });
     g.bullets = g.bullets.filter(function (b) { return b.alive; });
   }
+  // Mid-level save: a plain JSON copy of the game, and a strict restore that rejects anything odd.
+  var NUMS = ['t', 'freezeT', 'shovelT', 'spawnT', 'gate', 'spawned', 'killed', 'nextId', 'birdHp', 'seed'];
+  function snapshot(g) {
+    if (g.status !== 'play') return null;
+    var o = { v: 1, level: g.level, diff: g.diff, twoP: g.twoP, map: g.map.map(function (r) { return r.join(''); }), queue: g.queue.join(''), bonusAt: g.bonusAt.slice(), birdAlive: g.birdAlive,
+      power: g.power ? { kind: g.power.kind, x: g.power.x, y: g.power.y, t: g.power.t } : null,
+      players: g.players.map(function (p) { return { x: p.x, y: p.y, dir: p.dir, lives: p.lives, tier: p.tier, score: p.score, alive: p.alive, out: p.out, shieldT: p.shieldT, respawnT: p.respawnT, kills: p.kills }; }),
+      enemies: g.enemies.filter(function (e) { return e.alive; }).map(function (e) { return { id: e.id, type: e.type, x: e.x, y: e.y, dir: e.dir, hp: e.hp, spawning: e.spawning, spawnSafe: e.spawnSafe || 0, bonus: e.bonus, think: e.think, cool: e.cool }; }) };
+    NUMS.forEach(function (k) { o[k] = g[k]; }); return o;
+  }
+  function restore(o) {
+    try {
+      var fin = function (v, lo, hi) { if (typeof v !== 'number' || !isFinite(v) || v < lo || v > hi) throw 0; return v; };
+      var pos = function (v) { return Math.max(0, Math.min(12, fin(v, -0.5, 12.5))); };
+      var DIR = function (d) { if (!DIRS[d]) throw 0; return d; };
+      if (!o || o.v !== 1 || !DIFF[o.diff] || typeof o.twoP !== 'boolean') return null;
+      var g = newGame({ level: fin(o.level, 0, LV.LEVELS.length - 1), difficulty: o.diff, twoP: o.twoP, seed: 1 });
+      if (!Array.isArray(o.map) || o.map.length !== H) return null;
+      g.map = o.map.map(function (r) { if (typeof r !== 'string' || !/^[0-6]{26}$/.test(r)) throw 0; return r.split('').map(Number); });
+      if (typeof o.queue !== 'string' || !/^[bfra]{1,40}$/.test(o.queue)) return null; g.queue = o.queue.split('');
+      if (!Array.isArray(o.bonusAt) || o.bonusAt.length > 5) return null; g.bonusAt = o.bonusAt.map(function (v) { return fin(v, 0, 40); });
+      NUMS.forEach(function (k) { g[k] = fin(o[k], -5e9, 5e9); }); g.seed = g.seed | 0; g.spawned = Math.min(g.spawned, g.queue.length);
+      g.birdAlive = o.birdAlive === true; if (!g.birdAlive || g.birdHp < 1) return null;
+      if (!Array.isArray(o.players) || o.players.length !== g.players.length) return null;
+      o.players.forEach(function (q, i) { var p = g.players[i]; p.x = pos(q.x); p.y = pos(q.y); p.dir = DIR(q.dir); p.lives = fin(q.lives, 0, 9) | 0; p.tier = fin(q.tier, 0, 3) | 0; p.score = fin(q.score, 0, 1e8) | 0;
+        p.alive = q.alive === true; p.out = q.out === true; p.shieldT = Math.max(fin(q.shieldT, 0, 99), 2); p.respawnT = fin(q.respawnT, -1e6, 9); p.kills = fin(q.kills, 0, 999) | 0; });
+      if (!Array.isArray(o.enemies) || o.enemies.length > 6) return null;
+      g.enemies = o.enemies.map(function (q) { if (!TYPES[q.type]) throw 0; return { id: fin(q.id, 0, 1e6), kind: 'enemy', type: q.type, x: pos(q.x), y: pos(q.y), dir: DIR(q.dir), hp: fin(q.hp, 1, 4) | 0, maxHp: TYPES[q.type].hp, alive: true,
+        spawning: fin(q.spawning, 0, 2), spawnSafe: Math.max(fin(q.spawnSafe, -1e6, 1e6), 1), bonus: q.bonus === true, think: fin(q.think, -1e6, 1e6), cool: Math.max(fin(q.cool, -1e6, 1e6), 1), stuckT: 0, lx: q.x, ly: q.y, tread: 0, moving: false, hitT: 0 }; });
+      if (o.power) { if (POWERS.indexOf(o.power.kind) < 0) return null; g.power = { kind: o.power.kind, x: pos(o.power.x), y: pos(o.power.y), t: fin(o.power.t, 0, 30) }; }
+      g.bullets = []; g.mapVer++; return g;
+    } catch (e) { return null; }
+  }
   function carry(g) { return g.players.map(function (p) { return { lives: Math.max(1, p.lives), tier: p.tier, score: p.score }; }); }
   function remaining(g) { return g.queue.length - g.spawned + g.enemies.filter(function (e) { return e.alive; }).length; }
 
   var api = { N: N, H: H, EMPTY: EMPTY, BRICK: BRICK, STEEL: STEEL, WATER: WATER, TREES: TREES, ICE: ICE, BASE: BASE, TYPES: TYPES, DIFF: DIFF, POWERS: POWERS, DIRS: DIRS,
-    GATES: GATES, PSPAWN: PSPAWN, FORT: FORT, LEVELS: LV.LEVELS, newGame: newGame, step: step, carry: carry, remaining: remaining, free: free, move: move, turn: turn,
+    GATES: GATES, PSPAWN: PSPAWN, FORT: FORT, LEVELS: LV.LEVELS, newGame: newGame, step: step, snapshot: snapshot, restore: restore, carry: carry, remaining: remaining, free: free, move: move, turn: turn,
     applyPower: applyPower, killEnemy: killEnemy, fire: fire, buildMap: buildMap, rng: rng, spawnEnemy: spawnEnemy };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else { root.TK = root.TK || {}; root.TK.Engine = api; }
 })(this);
