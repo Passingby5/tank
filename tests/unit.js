@@ -35,9 +35,9 @@ ok('every gate and player spawn can reach the bird in every level');
   const h = blank(); h.players[0].x = 2; h.players[0].y = 6; run(h, 0.5, [{ dir: 'r' }]); const x2 = h.players[0].x; run(h, 0.5); assert.strictEqual(h.players[0].x, x2); ok('ice slides the player after letting go; plain ground stops at once (only moves in the pressed direction)'); }
 // 7. bird
 { const g = blank(); for (const c of E.FORT) g.map[c[1]][c[0]] = 0; const e = enemy(g, 'b', 6, 8, 'd'); g.birdHp = 1; E.fire(g, e, 9, false, 1); run(g, 1); assert.strictEqual(g.status, 'lost'); assert.strictEqual(g.reason, 'bird'); assert.strictEqual(g.birdAlive, false); ok('a shot that hits the bird loses the level'); }
-{ const hp = {}; for (const d of ['easy', 'medium', 'hard']) { const g = E.newGame({ level: 0, difficulty: d }); for (const c of E.FORT) g.map[c[1]][c[0]] = 0; g.spawnT = 999; g.shovelT = 0; let n = 0;
+{ const hp = {}; for (const d of ['easy', 'medium', 'hard']) { const g = E.newGame({ level: 0, difficulty: d }); for (const c of E.FORT) g.map[c[1]][c[0]] = 0; for (let y = 9; y < 24; y++) for (let x = 11; x < 15; x++) g.map[y][x] = 0; g.spawnT = 999; g.shovelT = 0; let n = 0;
     while (g.status === 'play' && n < 9) { const e = enemy(g, 'b', 6, 9, 'd'); E.fire(g, e, 9, false, 1); g.enemies = []; run(g, 0.5); n++; } hp[d] = n; }
-  assert.deepStrictEqual(hp, { easy: 3, medium: 2, hard: 2 }); ok('the bird takes 3 hits on Easy, 2 on Medium and Hard'); }
+  assert.deepStrictEqual(hp, { easy: 3, medium: 3, hard: 2 }); ok('the bird takes 3 hits on Easy and Medium, 2 on Hard'); }
 // 8. counts and spawning
 for (const [d, cnt, max] of [['easy', 15, 2], ['medium', 18, 3], ['hard', 20, 4]]) {
   const g = E.newGame({ level: 3, difficulty: d, seed: 4 }); assert.strictEqual(g.queue.length, cnt); let peak = 0; const gates = new Set();
@@ -102,4 +102,14 @@ ok('enemy count is 15 / 18 / 20 by difficulty, at most 2 / 3 / 4 alive, spawned 
 { let bad = 0, cnt = 0; for (let s = 0; s < 300; s++) { const g = E.newGame({ level: s % 22, seed: s * 7919 + 123456789, difficulty: ['easy', 'medium', 'hard'][s % 3], twoP: s % 5 === 0 });
     for (let i = 0; i < 60 * (5 + s % 90); i++) E.step(g, [{ dir: 'urdl'[(i >> 6) % 4], fire: i % 30 === 0 }, { dir: 'l', fire: i % 40 === 0 }], F); if (g.status !== 'play') continue; cnt++; if (!E.restore(JSON.parse(JSON.stringify(E.snapshot(g))))) bad++; }
   assert.strictEqual(bad, 0); ok('mid-level snapshots restore in all ' + cnt + ' random game states'); }
+// v3 polish: no backward nudge while a tank keeps its heading, and two tanks never get more overlapped than they were
+{ let back = 0, grow = 0, steps = 0; const ov = (a, b) => Math.max(0, Math.min(a.x + 1, b.x + 1) - Math.max(a.x, b.x)) * Math.max(0, Math.min(a.y + 1, b.y + 1) - Math.max(a.y, b.y));
+  for (let s = 0; s < 30; s++) { const g = E.newGame({ level: s % 22, seed: 500 + s, difficulty: ['easy', 'medium', 'hard'][s % 3], twoP: s % 4 === 0 });
+    for (let i = 0; i < 60 * 40 && g.status === 'play'; i++) { const all = () => g.players.concat(g.enemies).filter(t => t.alive);
+      const pre = new Map(all().map(t => [t, { x: t.x, y: t.y, dir: t.dir }])), pairs = []; const A = all();
+      for (let a = 0; a < A.length; a++) for (let b = a + 1; b < A.length; b++) pairs.push([A[a], A[b], ov(A[a], A[b])]);
+      E.step(g, [{ dir: 'urdl'[((i >> 5) + s) % 4], fire: i % 25 === 0 }, { dir: 'ldru'[(i >> 6) % 4], fire: false }], F); steps++;
+      for (const [t, p] of pre) if (t.alive && t.dir === p.dir) { const v = E.DIRS[p.dir]; if ((t.x - p.x) * v[0] + (t.y - p.y) * v[1] < -1e-6 && Math.abs(t.x - p.x) + Math.abs(t.y - p.y) < 0.5) back++; }
+      for (const [a, b, o] of pairs) if (a.alive && b.alive && ov(a, b) > o + 1e-6) grow++; } }
+  assert.strictEqual(back, 0, 'backward nudges: ' + back); assert.strictEqual(grow, 0, 'tank overlaps grew: ' + grow); ok('no backward nudge and no growing tank overlap over ' + steps + ' steps in 30 games'); }
 console.log(n + ' unit tests passed');

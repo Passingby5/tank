@@ -1,8 +1,11 @@
 // Compares every level with the 35 Battle City stages (QA's reference file, kept OUTSIDE this repo) using QA's metrics:
 // tile match (same tile type, empty counts) and wall Jaccard, best over all stages and mirror images. Gate for Level 1: both < 0.30.
-// Run: node tools/originality.js [path to bc_levels_ref.js]
-const fs = require('fs'), REF = process.argv[2] || '/workspace/qa/tank-v1/scripts/bc_levels_ref.js';
-if (!fs.existsSync(REF)) { console.log('skip: reference file not found at ' + REF); process.exit(0); }
+// Run: node tools/originality.js [path to bc_levels_ref.js]  (or BC_REF=path)
+// The reference is never copied into this repo (it is Battle City data and the repo will be public).
+// Set BC_REF to point at it, or SKIP_ORIGINALITY=1 to skip on purpose. A missing file fails loudly.
+const fs = require('fs'), REF = process.argv[2] || process.env.BC_REF || '/workspace/qa/tank-v1/scripts/bc_levels_ref.js';
+if (process.env.SKIP_ORIGINALITY === '1') { console.log('SKIPPED on purpose (SKIP_ORIGINALITY=1): Level 1 originality was NOT checked'); process.exit(0); }
+if (!fs.existsSync(REF)) { console.error('FAIL: Battle City reference not found at ' + REF + '\nSet BC_REF=/path/to/bc_levels_ref.js, or SKIP_ORIGINALITY=1 to skip this check on purpose.'); process.exit(1); }
 const BC = eval(fs.readFileSync(REF, 'utf8') + ';LEVEL_MAPS'), L = require('../src/levels.js').LEVELS;
 const cb = v => v <= 4 ? 'B' : v <= 9 ? 'S' : v == 10 ? 'W' : v == 11 ? 'F' : v == 12 ? 'I' : '.', ct = c => '#[]^_'.includes(c) ? 'B' : c == '@' ? 'S' : c == '~' ? 'W' : c == '%' ? 'F' : c == '-' ? 'I' : '.';
 const skip = (x, y) => (y == 0 && (x == 0 || x == 6 || x == 12)) || (y == 12 && (x == 4 || x == 8)) || (y >= 11 && x >= 5 && x <= 7), bc = BC.map(m => m.map(r => r.map(cb)));

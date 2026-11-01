@@ -31,6 +31,13 @@ const pc = r => (r.win * 100).toFixed(0) + '% (' + r.n + ' games, bird lost ' + 
 console.log('info: Easy all levels kid ' + pc(ea));
 assert(ek.win >= 0.5, 'Kid must win at least 50% of Easy L1-5'); ok2('Kid player model wins ' + pc(ek) + ' of Easy L1-5 (gate 50%)');
 assert(mk.win >= 0.25 && mp.win >= 0.08, 'Medium must be beatable'); ok2('Medium is beatable: kid ' + pc(mk) + ' on L1-5, pro ' + pc(mp) + ' on all levels');
+// Per-level gate (QA v2 MAJ-2): the kid model wins at least 30% of every Medium level, and Easy is never harder than Medium.
+{ const mrow = [], erow = []; let eSum = 0, mSum = 0;
+  for (const L of ALL) { const m = winRate([L], 'medium', 'kid', 24).win, e = winRate([L], 'easy', 'kid', 24).win; mrow.push(Math.round(m * 100)); erow.push(Math.round(e * 100)); eSum += e; mSum += m;
+    assert(m >= 0.3, 'Medium level ' + (L + 1) + ': kid wins only ' + pc({ win: m })); assert(e >= 0.5, 'Easy level ' + (L + 1) + ': kid wins only ' + pc({ win: e })); }
+  assert(eSum > mSum, 'Easy must be kinder than Medium overall');
+  console.log('info: Medium kid per level % ' + mrow.join(' ')); console.log('info: Easy kid per level % ' + erow.join(' '));
+  ok2('Kid wins at least 30% of every Medium level (lowest ' + Math.min(...mrow) + '%) and at least 50% of every Easy level (lowest ' + Math.min(...erow) + '%)'); }
 assert(hp5.win >= 0.03 && hp5.win < 0.5 && hp.win < mp.win, 'Hard must be challenging but possible'); ok2('Hard is challenging: pro wins ' + pc(hp5) + ' on L1-5 and ' + pc(hp) + ' overall');
 // the bird must not fall faster than a level can possibly end (undefended, player parked with a shield)
 for (const d of ['easy', 'medium', 'hard']) { const D = E.DIFF[d], minLevel = (D.count - D.max) * D.spawn; let worst = 1e9;

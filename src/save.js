@@ -1,7 +1,7 @@
 // Versioned save. Wrong version, broken JSON or bad fields are ignored safely.
 (function (root) {
   var KEY = 'tank_save', VERSION = 2, DIFFS = ['easy', 'medium', 'hard'];
-  function fresh() { return { v: VERSION, run: null, best: 0, settings: { muted: false, difficulty: 'medium' } }; }
+  function fresh() { return { v: VERSION, run: null, best: 0, settings: { muted: false, difficulty: 'easy' } }; }
   function int(v, lo, hi) { if (typeof v !== 'number' || !isFinite(v) || Math.floor(v) !== v) throw 0; return Math.max(lo, Math.min(hi, v)); }
   function cleanRun(r, nLevels) {
     try {

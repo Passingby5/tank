@@ -18,8 +18,9 @@
   // Tuned after QA v1: kid-friendly Easy, beatable Medium, challenging Hard. bird = hits the bird can take.
   // fire = enemy fire interval multiplier, bullet = enemy bullet speed multiplier.
   var DIFF = {
-    easy: { count: 15, lives: 5, speed: 0.75, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 90, bird: 3 },
-    medium: { count: 18, lives: 5, speed: 0.9, fire: 2.0, bullet: 0.85, max: 3, chase: 0.1, spawn: 2.6, aim: 0.1, aimBird: false, fortStart: 45, bird: 2 },
+    easy: { count: 15, lives: 6, speed: 0.75, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 90, bird: 3, soften: 0.8 },
+    medium: { count: 18, lives: 6, speed: 0.8, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 60, bird: 3, soften: 0.6,
+      last: { speed: 0.88, fire: 2.5, bullet: 0.8, max: 3, chase: 0.08, aim: 0.05, fortStart: 55, soften: 0.5 } }, // values move smoothly from level 1 to the last level
     hard: { count: 20, lives: 4, speed: 1.0, fire: 1.4, bullet: 0.95, max: 4, chase: 0.2, spawn: 2.4, aim: 0.3, aimBird: true, fortStart: 42, bird: 2 }
   };
   var POWERS = ['star', 'shield', 'shovel', 'bomb', 'clock', 'tank'];
@@ -44,14 +45,23 @@
     return m;
   }
 
+  // A difficulty with a 'last' block blends from its level 1 values to the 'last' values across the campaign.
+  function ramped(base, lvIdx) {
+    var D = {}, k; for (k in base) if (k !== 'last') D[k] = base[k]; if (!base.last) return D;
+    var p = lvIdx / Math.max(1, LV.LEVELS.length - 1);
+    for (k in base.last) { var v = base[k] + (base.last[k] - base[k]) * p; D[k] = (k === 'max' || k === 'bird') ? Math.round(v) : v; }
+    return D;
+  }
   function newGame(o) {
     o = o || {};
-    var lvIdx = Math.max(0, Math.min(LV.LEVELS.length - 1, o.level | 0)), lv = LV.LEVELS[lvIdx], dname = DIFF[o.difficulty] ? o.difficulty : 'medium', D = DIFF[dname];
+    var lvIdx = Math.max(0, Math.min(LV.LEVELS.length - 1, o.level | 0)), lv = LV.LEVELS[lvIdx], dname = DIFF[o.difficulty] ? o.difficulty : 'medium', D = ramped(DIFF[dname], lvIdx);
     var g = { level: lvIdx, name: lv.name, diff: dname, D: D, seed: (o.seed == null ? 12345 : o.seed) | 0, t: 0, map: buildMap(lv), mapVer: 1,
       players: [], enemies: [], bullets: [], power: null, events: [], status: 'play', endT: 0, freezeT: 0, shovelT: 0, spawnT: 1, gate: 0,
       queue: [], spawned: 0, killed: 0, birdAlive: true, nextId: 1, twoP: !!o.twoP };
     // enemy queue: scale counts to the difficulty total, then shuffle with the seed
-    var e = lv.enemies, total = e.b + e.f + e.r + e.a, keys = ['b', 'f', 'r', 'a'], q = [];
+    // soften: share of armored and rapid-fire tanks swapped for basic ones (kinder mixes on Easy and Medium)
+    var e0 = lv.enemies, sf = D.soften || 0, e = { a: Math.round(e0.a * (1 - sf)), r: Math.round(e0.r * (1 - sf)), f: e0.f }; e.b = e0.b + (e0.a - e.a) + (e0.r - e.r);
+    var total = e.b + e.f + e.r + e.a, keys = ['b', 'f', 'r', 'a'], q = [];
     keys.forEach(function (k) { var n = Math.round(e[k] * D.count / total); for (var i = 0; i < n; i++) q.push(k); });
     while (q.length > D.count) q.splice(q.indexOf('b') >= 0 ? q.indexOf('b') : q.indexOf('f') >= 0 ? q.indexOf('f') : 0, 1);
     while (q.length < D.count) q.push('b');
@@ -74,13 +84,16 @@
   function cellsOf(x, y, w, h) { return { x0: Math.max(0, Math.floor(x * 2 + EPS)), x1: Math.min(H - 1, Math.ceil((x + w) * 2 - EPS) - 1), y0: Math.max(0, Math.floor(y * 2 + EPS)), y1: Math.min(H - 1, Math.ceil((y + h) * 2 - EPS) - 1) }; }
   function blocksTank(v) { return v === BRICK || v === STEEL || v === WATER || v === BASE; }
   function overlap(ax, ay, bx, by) { return ax < bx + 1 - EPS && ax + 1 > bx + EPS && ay < by + 1 - EPS && ay + 1 > by + EPS; }
+  function ovArea(x, y, t) { return Math.max(0, Math.min(x + 1, t.x + 1) - Math.max(x, t.x)) * Math.max(0, Math.min(y + 1, t.y + 1) - Math.max(y, t.y)); }
   function tanks(g) { var a = []; g.players.forEach(function (p) { if (p.alive) a.push(p); }); g.enemies.forEach(function (e) { if (e.alive) a.push(e); }); return a; }
   function free(g, self, x, y) {
     if (x < -EPS || y < -EPS || x > N - 1 + EPS || y > N - 1 + EPS) return false;
     var c = cellsOf(x, y, 1, 1);
     for (var cy = c.y0; cy <= c.y1; cy++) for (var cx = c.x0; cx <= c.x1; cx++) if (blocksTank(g.map[cy][cx])) return false;
     var all = tanks(g);
-    for (var i = 0; i < all.length; i++) { var t = all[i]; if (t === self || t.spawning) continue; if (overlap(x, y, t.x, t.y) && !overlap(self.x, self.y, t.x, t.y)) return false; }
+    for (var i = 0; i < all.length; i++) { var t = all[i]; if (t === self) continue;
+      // tanks block each other (a spawning tank already claims its gate). If two already touch, only moves that pull apart are allowed.
+      if (overlap(x, y, t.x, t.y) && ovArea(x, y, t) >= ovArea(self.x, self.y, t) - EPS) return false; }
     return true;
   }
   // Move along dir by d. Stops flush against walls (on the half-tile grid). Returns distance moved.
@@ -90,7 +103,7 @@
     // flush to the next half-tile line in the way
     var bx = v[0] > 0 ? Math.floor(nx * 2 + EPS) / 2 : v[0] < 0 ? Math.ceil(nx * 2 - EPS) / 2 : t.x;
     var by = v[1] > 0 ? Math.floor(ny * 2 + EPS) / 2 : v[1] < 0 ? Math.ceil(ny * 2 - EPS) / 2 : t.y;
-    var moved = Math.abs(bx - t.x) + Math.abs(by - t.y);
+    var moved = (bx - t.x) * v[0] + (by - t.y) * v[1]; // only flush FORWARD, never nudge backwards
     if (moved > EPS && moved < d && free(g, t, bx, by)) { t.x = bx; t.y = by; return moved; }
     return 0;
   }
@@ -241,7 +254,7 @@
     g.players.forEach(function (p, i) {
       var inp = inputs[i] || {};
       if (!p.alive) {
-        if (!p.out) { p.respawnT -= dt; if (p.respawnT <= 0) { var sx = PSPAWN[i][0], sy = PSPAWN[i][1]; p.x = sx; p.y = sy; p.dir = 'u'; p.alive = true; p.shieldT = 3; p.slide = 0; g.events.push({ t: 'spawn', x: sx + 0.5, y: sy + 0.5 }); } }
+        if (!p.out) { p.respawnT -= dt; if (p.respawnT <= 0 && free(g, { x: -9, y: -9 }, PSPAWN[i][0], PSPAWN[i][1])) { var sx = PSPAWN[i][0], sy = PSPAWN[i][1]; p.x = sx; p.y = sy; p.dir = 'u'; p.alive = true; p.shieldT = 3; p.slide = 0; g.events.push({ t: 'spawn', x: sx + 0.5, y: sy + 0.5 }); } }
         return;
       }
       if (p.shieldT > 0) p.shieldT = Math.max(0, p.shieldT - dt);
@@ -328,7 +341,7 @@
   function carry(g) { return g.players.map(function (p) { return { lives: Math.max(1, p.lives), tier: p.tier, score: p.score }; }); }
   function remaining(g) { return g.queue.length - g.spawned + g.enemies.filter(function (e) { return e.alive; }).length; }
 
-  var api = { N: N, H: H, EMPTY: EMPTY, BRICK: BRICK, STEEL: STEEL, WATER: WATER, TREES: TREES, ICE: ICE, BASE: BASE, TYPES: TYPES, DIFF: DIFF, POWERS: POWERS, DIRS: DIRS,
+  var api = { N: N, H: H, EMPTY: EMPTY, BRICK: BRICK, STEEL: STEEL, WATER: WATER, TREES: TREES, ICE: ICE, BASE: BASE, TYPES: TYPES, DIFF: DIFF, ramped: ramped, POWERS: POWERS, DIRS: DIRS,
     GATES: GATES, PSPAWN: PSPAWN, FORT: FORT, LEVELS: LV.LEVELS, newGame: newGame, step: step, snapshot: snapshot, restore: restore, carry: carry, remaining: remaining, free: free, move: move, turn: turn,
     applyPower: applyPower, killEnemy: killEnemy, fire: fire, buildMap: buildMap, rng: rng, spawnEnemy: spawnEnemy };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else { root.TK = root.TK || {}; root.TK.Engine = api; }

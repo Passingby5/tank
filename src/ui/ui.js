@@ -22,7 +22,7 @@
   var lay = {};
   function place(el, x, y, w, h) { el.style.left = Math.round(x) + 'px'; el.style.top = Math.round(y) + 'px'; el.style.width = Math.round(w) + 'px'; el.style.height = Math.round(h) + 'px'; }
   function placePad(id, x, y, s) { var p = $(id), a = s / 3; place(p, x, y, s, s); var g = a * 0.03, pos = { u: [a, 0], l: [0, a], r: [2 * a, a], d: [a, 2 * a] }; [].forEach.call(p.children, function (arm) { var q = pos[arm.dataset.d]; place(arm, q[0] + g, q[1] + g, a - 2 * g, a - 2 * g); }); }
-  var PAD_MIN = 180; // D-pad arms stay at least 56 px at every size (arm = 0.94 x pad / 3)
+  var PAD_MIN = 180, GAP = 16; // GAP: free space between FIRE and the D-pad (QA v2 MAJ-1) // D-pad arms stay at least 56 px at every size (arm = 0.94 x pad / 3)
   function layout() {
     var vw = root.innerWidth, vh = root.innerHeight, hud = 52, two = st.twoP, land = vw > vh, dpr = Math.min(3, root.devicePixelRatio || 1);
     st.blocked = !!(two && touch && !land); // 2 players on a phone needs landscape: the game waits behind the message
@@ -34,13 +34,14 @@
       var side = PAD_MIN + 14; board = Math.max(120, Math.min(availH, vw - 2 * side)); bx = (vw - board) / 2; by = top + (availH - board) / 2;
       var sw = bx - 8, sh = availH;
       if (!two) { var ds = Math.max(PAD_MIN, Math.min(sw - 12, sh - 12, 210)), fs = Math.min(sw * 0.72, sh * 0.5, 140); placePad('dpad0', 6 + (sw - ds) / 2, top + (sh - ds) / 2, ds); place($('fire0'), vw - 6 - sw + (sw - fs) / 2, top + (sh - fs) / 2, fs, fs); }
-      else { var d2 = Math.max(PAD_MIN, Math.min(sw - 12, sh - 70, 186)), f2 = Math.max(54, Math.min(sh - d2 - 14, sw * 0.5, 96)), gy = top + (sh - d2 - f2 - 8) / 2;
-        placePad('dpad0', 6 + (sw - d2) / 2, gy, d2); place($('fire0'), 6 + (sw - f2) / 2, gy + d2 + 8, f2, f2);
-        placePad('dpad1', vw - 6 - sw + (sw - d2) / 2, gy, d2); place($('fire1'), vw - 6 - sw + (sw - f2) / 2, gy + d2 + 8, f2, f2); }
+      else { var d2 = Math.max(PAD_MIN, Math.min(sw - 12, sh - 70, 186)), f2 = Math.max(54, Math.min(sh - d2 - GAP - 6, sw * 0.5, 96)), gy = top + (sh - d2 - f2 - GAP) / 2;
+        placePad('dpad0', 6 + (sw - d2) / 2, gy, d2); place($('fire0'), 6 + (sw - f2) / 2, gy + d2 + GAP, f2, f2);
+        placePad('dpad1', vw - 6 - sw + (sw - d2) / 2, gy, d2); place($('fire1'), vw - 6 - sw + (sw - f2) / 2, gy + d2 + GAP, f2, f2); }
     } else {
       board = Math.min(vw - 8, availH - PAD_MIN - 22); bx = (vw - board) / 2; by = top;
       var cy = by + board + 10, ch = vh - cy - 8;
-      var ps = Math.max(PAD_MIN, Math.min(ch - 8, vw * 0.54, 210)), fb = Math.min(ch * 0.75, vw - ps - 34, 136); placePad('dpad0', Math.max(8, vw * 0.04), cy + (ch - ps) / 2, ps); place($('fire0'), vw - Math.max(10, vw * 0.05) - fb, cy + (ch - fb) / 2, fb, fb);
+      var px = Math.max(8, vw * 0.04), fr = vw - Math.max(10, vw * 0.05), ps = Math.max(PAD_MIN, Math.min(ch - 8, vw * 0.54, 210)), fb = Math.min(ch * 0.75, fr - px - ps - GAP, 136);
+      placePad('dpad0', px, cy + (ch - ps) / 2, ps); place($('fire0'), fr - fb, cy + (ch - fb) / 2, fb, fb);
     }
     var css = R.resize(board), c = $('cv');
     // snap the canvas to whole device pixels so fractional DPR screens stay crisp
@@ -102,7 +103,8 @@
   // Back button (Android / browser): during a game it pauses instead of leaving.
   var hist = false;
   function guardBack() { if (!hist && root.history && history.pushState) { try { history.pushState({ tk: 1 }, ''); hist = true; } catch (e) { } } }
-  root.addEventListener('popstate', function () { hist = false; if (st.g && (st.screen === 'play' || st.screen === 'ov')) { if (st.screen === 'play' && !st.paused) pause(); guardBack(); } });
+  root.addEventListener('popstate', function () { hist = false; if (st.g && st.paused) { act('home'); return; } // second Back on the pause screen goes Home (the run is already saved)
+    if (st.g && (st.screen === 'play' || st.screen === 'ov')) { if (st.screen === 'play' && !st.paused) pause(); guardBack(); } });
   // ---------- buttons (debounced) ----------
   var lastTap = 0;
   document.addEventListener('click', function (e) {

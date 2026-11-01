@@ -11,17 +11,17 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 - Brick: blocks tanks and shots, a shot breaks the strip it hits. Steel: blocks everything, only a 3-star gun breaks it. Water: blocks tanks, shots fly over. Trees: tanks drive under them and are hidden. Ice: your tank slides a little after you let go.
 - Enemies: basic, fast, rapid-fire and armored (takes 4 hits). 15 per level on Easy, 18 on Medium, 20 on Hard; at most 2 / 3 / 4 on the map at once. They spawn from 3 gates.
 - Three enemies per level flash red, picked at random inside the ranges 2-6, 8-12 and 14-17. Hitting it drops a power-up: star (gun upgrade, up to 3 stars), shield, shovel (steel fort for a while), bomb (all enemies on the map blow up), clock (enemies freeze), tank (extra life).
-- The bird sits behind a two layer brick fort that starts as steel (Easy 90 s, Medium 45 s, Hard 42 s). The bird takes 3 enemy hits on Easy and 2 on Medium and Hard. If all players run out of lives, the level is lost.
-- Easy, Medium and Hard change enemy count, speed, aim, fire rate, bullet speed, lives (5 / 5 / 4) and bird hits. Levels 1-5 are a little gentler.
+- The bird sits behind a two layer brick fort that starts as steel (Easy 90 s, Medium 45 s, Hard 42 s). The bird takes 3 enemy hits on Easy and Medium and 2 on Hard. If all players run out of lives, the level is lost.
+- Easy, Medium and Hard change enemy count, speed, aim, fire rate, bullet speed, lives (6 / 6 / 4) and bird hits. Easy is the default on first run. Easy and Medium swap some armored and rapid-fire tanks for basic ones. Medium starts gentle on Level 1 and ramps smoothly to its full strength on the last level; Hard keeps a little extra help on levels 1-5.
 - 2 players on one device: keyboard W A S D + Space and Arrows + Enter, or a split touch pad in landscape.
 
 ## Tech
 - Plain JavaScript, no libraries. src/levels.js (data), src/engine.js (pure rules, seeded RNG, fixed 60 Hz steps, runs in Node), src/render.js (canvas art), src/audio.js (WebAudio), src/save.js (versioned save), src/ui/ (screens and controls).
 - build.js makes site/ (single page PWA with manifest, icons, network-first service worker, version.json) and an optional single file test copy.
-- Version label on the home screen: "v2 - Oct 31 - <commit>".
+- Version label on the home screen: "v3 - Oct 31 - <commit>".
 
 ## Acceptance checklist
-1. Home screen shows title, Play (1 player), 2 Players, Easy/Medium/Hard, How to Play, Sound toggle and the label "v2 - Oct 31 - <7 char commit>".
+1. Home screen shows title, Play (1 player), 2 Players, Easy/Medium/Hard, How to Play, Sound toggle and the label "v3 - Oct 31 - <7 char commit>".
 2. Continue appears only when a valid save exists.
 3. levels.js holds at least 20 levels, each 13 rows of 13 valid tile characters, kept apart from engine code.
 4. In every level each enemy gate and each player spawn can reach the bird by a path that only goes through open ground or brick.
@@ -54,3 +54,12 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 31. Level 1 overlaps less than 30% (tile match and wall Jaccard) with every Battle City stage (tools/originality.js).
 32. Prefers-reduced-motion turns off screen shake and cuts particles.
 33. Under 4x CPU throttle at 390x844 DPR 3, a busy game runs at least 50 fps with at most 10% of frames over 33 ms.
+
+## v3 additions (QA v2 report)
+- FIRE keeps at least 16 px from every D-pad arm at every size, portrait, landscape and 2 players (browser test measures it). Arms stay at least 56 px.
+- The kid player model wins at least 30% of every Medium level and at least 50% of every Easy level (per-level gate in npm test).
+- On the pause screen, a second Back goes Home; the run is saved and Continue resumes it.
+- Perf test gates the median of 3 runs (at least 50 fps, at most 10% of frames over 33 ms).
+- Originality check needs the Battle City reference file kept outside the repo; it fails if missing unless SKIP_ORIGINALITY=1.
+- Tanks never get nudged backward when turning, and a tank never drives into another tank or a spawning tank.
+- Level 1 Frost Garden: mostly brick with a little ice, trees and steel; under 0.30 on both originality metrics.
