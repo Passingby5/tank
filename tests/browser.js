@@ -90,7 +90,7 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
       if (vp.name === 'portrait') { await shot('2-gameplay-explosion.jpg'); }
       if (vp.name === 'landscape') await shot('4-landscape.jpg');
       if (vp.name === 'small320') await shot('5-small-phone-320.jpg');
-      if (vp.name === 'portrait') { await page.evaluate(() => { const g = TK.UI.game(), p = g.players[0]; g.bullets = []; g.power = { kind: 'clock', x: 2, y: 7, t: 15 }; p.x = 6; p.y = 9; g.events = []; TK.Engine.applyPower(g, p, 'shovel'); TK.Engine.applyPower(g, p, 'star'); TK.Render.onEvents(g); g.events = []; });
+      if (vp.name === 'portrait') { await page.evaluate(() => { const g = TK.UI.game(), p = g.players[0]; g.bullets = []; g.power = { kind: 'clock', x: 2, y: 7, t: 15 }; p.x = 6; p.y = 9; g.events = []; TK.Engine.applyPower(g, p, 'shovel'); TK.Render.onEvents(g); g.events = []; });
         await page.waitForTimeout(350); await shot('3-power-up.jpg'); assert.strictEqual(await page.evaluate(() => TK.UI.game().map[22][12]), 2); }
     }
     // pause saves; Home then Continue resumes the level

@@ -200,6 +200,7 @@
     if (big) add({ k: 'ring', x: x, y: y, l: 0, m: 0.45, r: 1.4 });
   }
   function debris(x, y, col) { for (var i = 0; i < 5; i++) { var a = Math.random() * 6.283, sp = 1 + Math.random() * 2.5; add({ k: 'chip', x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, l: 0, m: 0.4 + Math.random() * 0.3, r: 0.05 + Math.random() * 0.05, c: col, rot: Math.random() * 6 }); } add({ k: 'smoke', x: x, y: y, vx: 0, vy: -0.2, l: 0, m: 0.5, r: 0.18 }); }
+  function addFloat(f) { floats.forEach(function (o) { if (o.l < 0.6 && Math.abs(o.x - f.x) < 1.2 && Math.abs(o.y - f.l * 0.8 - f.y) < 0.5) f.y -= 0.5; }); floats.push(f); }
   function onEvents(g) {
     lastG = g;
     g.events.forEach(function (e) {
@@ -209,8 +210,8 @@
         case 'brick': debris(e.x, e.y, '#c8653a'); break;
         case 'steelbreak': debris(e.x, e.y, '#c9d1da'); break;
         case 'hit': case 'spark': case 'clank': case 'armor': case 'deflect': boom(e.x, e.y, false); break;
-        case 'score': floats.push({ x: e.x, y: e.y, s: String(e.v), l: 0 }); break;
-        case 'pickup': floats.push({ x: e.x, y: e.y, s: { star: 'Star!', shield: 'Shield!', shovel: 'Steel fort!', bomb: 'Boom!', clock: 'Freeze!', tank: '+1 life' }[e.kind], l: 0, big: true }); add({ k: 'ring', x: e.x, y: e.y, l: 0, m: 0.5, r: 1.2, c: '255,230,120' }); if (e.kind === 'bomb' && !reduce) shake = 0.25; break;
+        case 'score': addFloat({ x: e.x, y: e.y, s: String(e.v), l: 0 }); break;
+        case 'pickup': addFloat({ x: e.x, y: e.y, s: { star: 'Star!', shield: 'Shield!', shovel: 'Steel fort!', bomb: 'Boom!', clock: 'Freeze!', tank: '+1 life' }[e.kind], l: 0, big: true }); add({ k: 'ring', x: e.x, y: e.y, l: 0, m: 0.5, r: 1.2, c: '255,230,120' }); if (e.kind === 'bomb' && !reduce) shake = 0.25; break;
         case 'bird': boom(e.x, e.y, true); boom(e.x - 0.3, e.y - 0.2, true); shake = 0.35; break;
       }
     });
