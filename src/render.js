@@ -167,7 +167,7 @@
     c.fillStyle = tgr; c.beginPath(); if (big) { rr(c, -tr, -tr, tr * 2, tr * 2, tr * 0.35); } else c.arc(0, 0, tr, 0, 7); c.fill();
     c.strokeStyle = P[3]; c.lineWidth = Math.max(1, s * 0.018); c.stroke();
     c.fillStyle = P[2]; c.beginPath(); c.arc(tr * 0.25, tr * 0.25, tr * 0.36, 0, 7); c.fill(); c.fillStyle = 'rgba(255,255,255,0.5)'; c.beginPath(); c.arc(tr * 0.15, tr * 0.12, tr * 0.12, 0, 7); c.fill();
-    if (opt.hit) { c.globalCompositeOperation = 'lighter'; c.fillStyle = 'rgba(255,255,255,0.55)'; rr(c, -hw * 0.94, -th / 2, s * 0.94 * 2 / 2 * 2 / 2 * 2, th, s * 0.08); c.fill(); c.globalCompositeOperation = 'source-over'; }
+    if (opt.hit) { c.globalCompositeOperation = 'lighter'; c.fillStyle = 'rgba(255,255,255,0.55)'; rr(c, -hw * 0.94, -th / 2, hw * 1.88, th, s * 0.08); c.fill(); c.globalCompositeOperation = 'source-over'; }
     if (opt.frozen) { c.fillStyle = 'rgba(140,210,255,0.35)'; rr(c, -hw * 0.94, -th / 2, hw * 1.88, th, s * 0.08); c.fill(); }
     c.restore();
   }
@@ -192,11 +192,11 @@
   function add(p) { if (parts.length < 600) parts.push(p); }
   function boom(x, y, big) {
     var s = big ? 1 : 0.45, i;
-    flashes.push({ x: x, y: y, t: 0, max: big ? 0.45 : 0.2, r: big ? 1.1 : 0.45 });
+    flashes.push({ x: x, y: y, t: 0, max: big ? 0.55 : 0.2, r: big ? 1.5 : 0.45 });
     if (big && !reduce) shake = Math.max(shake, 0.12);
     for (i = 0; i < (big ? 26 : 10); i++) { var a = Math.random() * 6.283, sp = (1.5 + Math.random() * 5) * s; add({ k: 'spark', x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, l: 0, m: 0.3 + Math.random() * 0.35, w: 0.05 }); }
     for (i = 0; i < (big ? 12 : 4); i++) { a = Math.random() * 6.283; sp = Math.random() * 1.2 * s; add({ k: 'smoke', x: x + Math.cos(a) * 0.2 * s, y: y + Math.sin(a) * 0.2 * s, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp - 0.3, l: 0, m: 0.8 + Math.random() * 0.8, r: (0.25 + Math.random() * 0.3) * s }); }
-    for (i = 0; i < (big ? 10 : 3); i++) { a = Math.random() * 6.283; sp = (1 + Math.random() * 3) * s; add({ k: 'fire', x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, l: 0, m: 0.25 + Math.random() * 0.3, r: (0.2 + Math.random() * 0.25) * s }); }
+    for (i = 0; i < (big ? 16 : 3); i++) { a = Math.random() * 6.283; sp = (1 + Math.random() * 3) * s; add({ k: 'fire', x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, l: 0, m: 0.3 + Math.random() * 0.4, r: (0.25 + Math.random() * 0.35) * s }); }
     if (big) add({ k: 'ring', x: x, y: y, l: 0, m: 0.45, r: 1.4 });
   }
   function debris(x, y, col) { for (var i = 0; i < 5; i++) { var a = Math.random() * 6.283, sp = 1 + Math.random() * 2.5; add({ k: 'chip', x: x, y: y, vx: Math.cos(a) * sp, vy: Math.sin(a) * sp, l: 0, m: 0.4 + Math.random() * 0.3, r: 0.05 + Math.random() * 0.05, c: col, rot: Math.random() * 6 }); } add({ k: 'smoke', x: x, y: y, vx: 0, vy: -0.2, l: 0, m: 0.5, r: 0.18 }); }
