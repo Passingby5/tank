@@ -94,7 +94,7 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
         await page.waitForTimeout(350); await shot('3-power-up.jpg'); assert.strictEqual(await page.evaluate(() => TK.UI.game().map[22][12]), 2); }
     }
     // pause saves the exact spot; reload + Continue resumes it
-    const before = await page.evaluate(() => { const g = TK.UI.game(); g.players[0].score = 2500; g.players[0].tier = 2; g.killed = 7; return { score: 2500, killed: 7, spawned: g.spawned, x: g.players[0].x }; });
+    const before = await page.evaluate(() => { const g = TK.UI.game(); g.bullets = []; g.freezeT = 60; g.players[0].cool = 99; g.players[0].score = 2500; g.players[0].tier = 2; g.killed = 7; return { score: 2500, killed: 7, spawned: g.spawned, x: g.players[0].x }; });
     await tap('#hud [data-act=pause]'); s = await S(); assert.strictEqual(s.paused, true); assert.strictEqual(await page.textContent('#ovTitle'), 'Paused'); assert(/Saved right here/.test(await page.textContent('#ovText'))); await layout('pause');
     await tap('#ov [data-act=home]'); assert(await page.isVisible('#btnContinue')); await page.reload(); await page.waitForTimeout(300); assert(await page.isVisible('#btnContinue'));
     await tap('#btnContinue'); s = await S(); assert.strictEqual(s.screen, 'play'); assert.strictEqual(s.level, 0);
