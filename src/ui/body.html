@@ -1,0 +1,38 @@
+<div id="app">
+  <section id="home" class="screen">
+    <div class="logo"><canvas id="logoArt"></canvas><h1>TANK</h1><p class="tag">Guard the golden bird. Stop every enemy tank.</p></div>
+    <div class="menu">
+      <button data-act="continue" id="btnContinue" class="big hidden">Continue</button>
+      <button data-act="play" data-v="1" class="big" id="btnPlay">Play</button>
+      <button data-act="play" data-v="2" class="alt" id="btnTwo">2 Players</button>
+      <div class="row" id="diffRow"><button data-act="diff" data-v="easy">Easy</button><button data-act="diff" data-v="medium">Medium</button><button data-act="diff" data-v="hard">Hard</button></div>
+      <div class="row"><button data-act="help">How to Play</button><button data-act="mute" class="muteBtn">Sound: On</button></div>
+    </div>
+    <p id="best"></p>
+    <p id="ver"></p>
+  </section>
+  <section id="help" class="screen hidden">
+    <h2>How to Play</h2>
+    <ul class="help">
+      <li>Keep the golden bird safe. If a shot hits it, the level is lost.</li>
+      <li>Stop every enemy tank to clear the level.</li>
+      <li>Brick breaks. Steel only breaks with a 3 star gun. Water blocks tanks. Trees hide tanks. Ice is slippery.</li>
+      <li>Hit a flashing tank to drop a power-up.</li>
+      <li>Phone: arrow pad on the left to drive, big button on the right to fire. For 2 players, turn the phone sideways.</li>
+      <li>Keyboard: arrows or W A S D to drive, Space or Enter to fire, P to pause. 2 players: W A S D + Space and arrows + Enter.</li>
+    </ul>
+    <div class="powers" id="powerList"></div>
+    <div class="powers" id="foeList"></div>
+    <button data-act="home" class="back big">Back</button>
+  </section>
+  <section id="play" class="screen hidden">
+    <div id="hud"><div id="hudL"></div><div id="hudM"></div><div id="hudR"><button data-act="mute" class="icon muteBtn" aria-label="Sound">&#9835;</button><button data-act="pause" class="icon" aria-label="Pause">II</button></div></div>
+    <canvas id="cv"></canvas>
+    <div class="dpad" id="dpad0" aria-label="Move"><div class="arm" data-d="u"><i></i></div><div class="arm" data-d="l"><i></i></div><div class="arm" data-d="r"><i></i></div><div class="arm" data-d="d"><i></i></div></div>
+    <div class="fire" id="fire0" aria-label="Fire"><span>FIRE</span></div>
+    <div class="dpad p2" id="dpad1" aria-label="Move player 2"><div class="arm" data-d="u"><i></i></div><div class="arm" data-d="l"><i></i></div><div class="arm" data-d="r"><i></i></div><div class="arm" data-d="d"><i></i></div></div>
+    <div class="fire p2" id="fire1" aria-label="Fire player 2"><span>FIRE</span></div>
+    <div id="rotate" class="hidden">Turn your phone sideways for 2 players.</div>
+  </section>
+  <section id="ov" class="screen dim hidden"><div class="card"><h2 id="ovTitle"></h2><p id="ovText"></p><div class="col" id="ovBtns"></div></div></section>
+</div>
