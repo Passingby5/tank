@@ -1,7 +1,7 @@
 // Tank renderer. Everything is drawn in code at devicePixelRatio for crisp, detailed art. All art is original.
 (function (root) {
   var E = root.TK.Engine, N = 13;
-  var maxDpr = 3, sprites = {}, vign = null, treeRects = [], cv, cx, W = 0, T = 0, dpr = 1, terr = null, terrVer = -1, trees = null, treeVer = -1, parts = [], floats = [], shake = 0, flashes = [], frames = 0, lastG = null, reduce = false;
+  var maxDpr = 3, sprites = {}, vign = null, treeRects = [], cv, cx, W = 0, T = 0, dpr = 1, terr = null, terrVer = -1, terrMap = null, trees = null, treeVer = -1, treeMap = null, parts = [], floats = [], shake = 0, flashes = [], frames = 0, lastG = null, reduce = false;
   function hash(x, y) { var h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
   function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   function lg(c, x0, y0, x1, y1, stops) { var g = c.createLinearGradient(x0, y0, x1, y1); stops.forEach(function (s, i) { g.addColorStop(s[0], s[1]); }); return g; }
@@ -20,7 +20,7 @@
   function setup(canvas) { cv = canvas; cx = cv.getContext('2d'); }
   function resize(css) {
     dpr = Math.min(maxDpr, root.devicePixelRatio || 1); var px = Math.max(26, Math.floor(css * dpr / 26) * 26); // round DOWN so the board never overflows
-    if (px !== W) { W = px; T = W / N; cv.width = cv.height = W; terrVer = treeVer = -1; resetSprites(); }
+    if (px !== W) { W = px; T = W / N; cv.width = cv.height = W; invalidate(); resetSprites(); }
     cv.style.width = cv.style.height = (W / dpr) + 'px'; return W / dpr;
   }
 
@@ -107,14 +107,16 @@
     var vg = c.createRadialGradient(W / 2, W / 2, W * 0.45, W / 2, W / 2, W * 0.75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.3)'); c.fillStyle = vg; c.fillRect(0, 0, W, W);
     // gate marks
     E.GATES.forEach(function (p) { c.strokeStyle = 'rgba(255,90,70,0.25)'; c.lineWidth = Math.max(1, T * 0.03); c.setLineDash([T * 0.1, T * 0.08]); c.strokeRect(p[0] * T + T * 0.08, p[1] * T + T * 0.08, T * 0.84, T * 0.84); c.setLineDash([]); });
-    terrVer = g.mapVer;
+    terrVer = g.mapVer; terrMap = g.map;
   }
+  // terrain and tree caches are keyed to the map object itself AND its version: a new game or level has a new map
+  function invalidate() { terrVer = treeVer = -1; terrMap = treeMap = null; }
   function buildTrees(g) {
     if (!trees) trees = document.createElement('canvas'); if (trees.width !== W) trees.width = trees.height = W;
     var c = trees.getContext('2d'); c.clearRect(0, 0, W, W);
     for (var y = 0; y < 26; y++) for (var x = 0; x < 26; x++) if (g.map[y][x] === E.TREES) drawTreeCell(c, x, y);
     treeRects = []; for (var ty = 0; ty < N; ty++) for (var tx = 0; tx < N; tx++) { var any = false; for (var k = 0; k < 4; k++) if (g.map[ty * 2 + (k >> 1)][tx * 2 + (k & 1)] === E.TREES) any = true; if (any) treeRects.push(tx, ty); }
-    treeVer = g.mapVer;
+    treeVer = g.mapVer; treeMap = g.map;
   }
   function drawWater(c, g, t) {
     var h = T / 2; c.strokeStyle = 'rgba(190,235,255,0.55)'; c.lineWidth = Math.max(1, h * 0.06); c.beginPath(); var dots = [];
@@ -253,8 +255,8 @@
   // ---------- frame ----------
   function frame(g, dt, paused) {
     frames++; var c = cx, t = g.t, s = T; if (!W) return;
-    if (terrVer !== g.mapVer || !terr) buildTerrain(g);
-    if (treeVer !== g.mapVer || !trees) buildTrees(g);
+    if (terrVer !== g.mapVer || terrMap !== g.map || !terr) buildTerrain(g);
+    if (treeVer !== g.mapVer || treeMap !== g.map || !trees) buildTrees(g);
     c.save();
     if (reduce) shake = 0;
     if (shake > 0 && !paused) { shake = Math.max(0, shake - dt); var m = shake * s * 0.5; c.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m); }
@@ -303,5 +305,5 @@
   function setMaxDpr(v) { maxDpr = v; }
   function setReduce(v) { reduce = !!v; }
   function stats() { return { w: W, dpr: dpr, frames: frames, parts: parts.length + flashes.length, reduce: reduce, maxDpr: maxDpr, sprites: Object.keys(sprites).length }; }
-  root.TK.Render = { setup: setup, resize: resize, frame: frame, onEvents: onEvents, drawIcon: drawIcon, drawTank: drawTank, drawPower: drawPower, drawBird: drawBird, stats: stats, setReduce: setReduce, setMaxDpr: setMaxDpr, boom: boom };
+  root.TK.Render = { setup: setup, resize: resize, frame: frame, onEvents: onEvents, drawIcon: drawIcon, drawTank: drawTank, drawPower: drawPower, drawBird: drawBird, stats: stats, setReduce: setReduce, setMaxDpr: setMaxDpr, boom: boom, invalidate: invalidate };
 })(this);

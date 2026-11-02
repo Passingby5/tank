@@ -38,7 +38,13 @@ assert(mk.win >= 0.25 && mp.win >= 0.08, 'Medium must be beatable'); ok2('Medium
   assert(eSum > mSum, 'Easy must be kinder than Medium overall');
   console.log('info: Medium kid per level % ' + mrow.join(' ')); console.log('info: Easy kid per level % ' + erow.join(' '));
   ok2('Kid wins at least 30% of every Medium level (lowest ' + Math.min(...mrow) + '%) and at least 50% of every Easy level (lowest ' + Math.min(...erow) + '%)'); }
-assert(hp5.win >= 0.03 && hp5.win < 0.5 && hp.win < mp.win, 'Hard must be challenging but possible'); ok2('Hard is challenging: pro wins ' + pc(hp5) + ' on L1-5 and ' + pc(hp) + ' overall');
+// QA v3: Hard ramps too. The pro model wins at least 20% of every Hard level, and Hard stays clearly the hardest.
+{ const hrow = [], mrow = [], krow = [], mkrow = []; for (const L of ALL) { hrow.push(winRate([L], 'hard', 'pro', 16).win); mrow.push(winRate([L], 'medium', 'pro', 16).win); krow.push(winRate([L], 'hard', 'kid', 16).win); mkrow.push(winRate([L], 'medium', 'kid', 16).win); }
+  const avg = a => a.reduce((x, y) => x + y, 0) / a.length, P = a => a.map(v => Math.round(v * 100)).join(' ');
+  console.log('info: Hard pro per level % ' + P(hrow)); console.log('info: Medium pro per level % ' + P(mrow)); console.log('info: Hard kid per level % ' + P(krow));
+  hrow.forEach((v, L) => assert(v >= 0.2, 'Hard level ' + (L + 1) + ': pro wins only ' + Math.round(v * 100) + '%'));
+  assert(avg(hrow) <= avg(mrow) - 0.1, 'Hard must be clearly harder than Medium for the pro model'); assert(avg(krow) <= avg(mkrow) - 0.2, 'Hard must be clearly harder than Medium for the kid model');
+  ok2('Hard: pro wins at least 20% of every level (lowest ' + Math.round(Math.min(...hrow) * 100) + '%), averages pro ' + Math.round(avg(hrow) * 100) + '% vs Medium ' + Math.round(avg(mrow) * 100) + '%, kid ' + Math.round(avg(krow) * 100) + '% vs Medium ' + Math.round(avg(mkrow) * 100) + '%'); }
 // the bird must not fall faster than a level can possibly end (undefended, player parked with a shield)
 for (const d of ['easy', 'medium', 'hard']) { const D = E.DIFF[d], minLevel = (D.count - D.max) * D.spawn; let worst = 1e9;
   for (let L = 0; L < E.LEVELS.length; L++) for (let s = 0; s < 3; s++) { const g = E.newGame({ level: L, difficulty: d, seed: L * 9 + s }); for (let i = 0; i < 60 * 600 && g.status === 'play'; i++) { g.players[0].shieldT = 5; E.step(g, [{}], F); } worst = Math.min(worst, g.status === 'play' ? 600 : g.t); }

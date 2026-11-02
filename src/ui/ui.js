@@ -114,11 +114,11 @@
   function act(a, v) {
     switch (a) {
       case 'play': var two = v === '2'; startLevel(0, null, two, data.settings.difficulty, 0); break;
-      case 'continue': if (data.run) { data.settings.difficulty = data.run.difficulty; var rg = data.run.snap ? E.restore(data.run.snap) : null; if (rg && rg.level === data.run.level) { st.twoP = rg.twoP; st.g = rg; st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start'); } else startLevel(data.run.level, data.run.carry, data.run.twoP, data.run.difficulty, data.run.attempt); } break;
+      case 'continue': if (data.run) { data.settings.difficulty = data.run.difficulty; var rg = data.run.snap ? E.restore(data.run.snap) : null; if (rg && rg.level === data.run.level) { st.twoP = rg.twoP; st.g = rg; R.invalidate(); st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start'); } else startLevel(data.run.level, data.run.carry, data.run.twoP, data.run.difficulty, data.run.attempt); } break;
       case 'diff': data.settings.difficulty = v; save(); refreshHome(); break;
       case 'mute': data.settings.muted = !data.settings.muted; save(); refreshMute(); break;
       case 'help': show('help'); break;
-      case 'home': st.g = null; st.paused = false; show('home'); break;
+      case 'home': st.g = null; R.invalidate(); st.paused = false; show('home'); break;
       case 'pause': pause(); break;
       case 'resume': resume(); break;
       case 'restart': var r = data.run; if (r) startLevel(r.level, r.carry, r.twoP, r.difficulty, r.attempt + 1); break;
@@ -129,7 +129,7 @@
   function startLevel(level, carry, twoP, diff, attempt) {
     st.twoP = twoP; attempt = attempt || 0;
     var seed = (level + 1) * 7919 + attempt * 104729 + (twoP ? 13 : 0);
-    st.g = E.newGame({ level: level, difficulty: diff, twoP: twoP, carry: carry, seed: seed });
+    st.g = E.newGame({ level: level, difficulty: diff, twoP: twoP, carry: carry, seed: seed }); R.invalidate();
     data.run = { level: level, difficulty: st.g.diff, twoP: twoP, attempt: attempt, carry: E.carry(st.g), snap: null }; save();
     st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start');
   }

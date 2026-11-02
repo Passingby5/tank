@@ -39,7 +39,7 @@ ok('every gate and player spawn can reach the bird in every level');
     while (g.status === 'play' && n < 9) { const e = enemy(g, 'b', 6, 9, 'd'); E.fire(g, e, 9, false, 1); g.enemies = []; run(g, 0.5); n++; } hp[d] = n; }
   assert.deepStrictEqual(hp, { easy: 3, medium: 3, hard: 2 }); ok('the bird takes 3 hits on Easy and Medium, 2 on Hard'); }
 // 8. counts and spawning
-for (const [d, cnt, max] of [['easy', 15, 2], ['medium', 18, 3], ['hard', 20, 4]]) {
+for (const [d, cnt, max] of [['easy', 15, 2], ['medium', 18, 3], ['hard', 18, 3]]) {
   const g = E.newGame({ level: 3, difficulty: d, seed: 4 }); assert.strictEqual(g.queue.length, cnt); let peak = 0; const gates = new Set();
   for (let i = 0; i < 60 * 60; i++) { g.players[0].shieldT = 5; E.step(g, idle, F); g.events.forEach(ev => { if (ev.t === 'spawn' && ev.y < 1) gates.add(ev.x); }); peak = Math.max(peak, g.enemies.filter(e => e.alive).length); if (i % 300 === 299) { const a = g.enemies.find(e => e.alive && !e.spawning); if (a) E.killEnemy(g, a, null); } if (g.status !== 'play') break; }
   assert(peak <= max && peak >= Math.min(max, 2), d + ' peak ' + peak); assert.strictEqual(gates.size, 3, 'uses 3 gates');

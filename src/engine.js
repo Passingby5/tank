@@ -21,7 +21,8 @@
     easy: { count: 15, lives: 6, speed: 0.75, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 90, bird: 3, soften: 0.8 },
     medium: { count: 18, lives: 6, speed: 0.8, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 60, bird: 3, soften: 0.6,
       last: { speed: 0.88, fire: 2.5, bullet: 0.8, max: 3, chase: 0.08, aim: 0.05, fortStart: 55, soften: 0.5 } }, // values move smoothly from level 1 to the last level
-    hard: { count: 20, lives: 4, speed: 1.0, fire: 1.4, bullet: 0.95, max: 4, chase: 0.2, spawn: 2.4, aim: 0.3, aimBird: true, fortStart: 42, bird: 2 }
+    hard: { count: 18, lives: 5, speed: 0.95, fire: 2.0, bullet: 0.9, max: 3, chase: 0.15, spawn: 2.4, aim: 0.25, aimBird: false, fortStart: 45, bird: 2, soften: 0.3,
+      last: { speed: 0.92, fire: 2.2, chase: 0.14, aim: 0.2, soften: 0.75 } } // Hard: sharp from Level 1, with the enemy mix eased on later levels so it stays winnable (QA v3)
   };
   var POWERS = ['star', 'shield', 'shovel', 'bomb', 'clock', 'tank'];
   var BONUS_RANGES = [[1, 5], [7, 11], [13, 16]]; // one flashing tank is picked at random inside each range
@@ -46,6 +47,8 @@
   }
 
   // A difficulty with a 'last' block blends from its level 1 values to the 'last' values across the campaign.
+  // map versions come from one global counter, so no two games or levels ever share a version (QA v3 BLOCKER)
+  var VER = 0; function nextVer() { return ++VER; }
   function ramped(base, lvIdx) {
     var D = {}, k; for (k in base) if (k !== 'last') D[k] = base[k]; if (!base.last) return D;
     var p = lvIdx / Math.max(1, LV.LEVELS.length - 1);
@@ -55,7 +58,7 @@
   function newGame(o) {
     o = o || {};
     var lvIdx = Math.max(0, Math.min(LV.LEVELS.length - 1, o.level | 0)), lv = LV.LEVELS[lvIdx], dname = DIFF[o.difficulty] ? o.difficulty : 'medium', D = ramped(DIFF[dname], lvIdx);
-    var g = { level: lvIdx, name: lv.name, diff: dname, D: D, seed: (o.seed == null ? 12345 : o.seed) | 0, t: 0, map: buildMap(lv), mapVer: 1,
+    var g = { level: lvIdx, name: lv.name, diff: dname, D: D, seed: (o.seed == null ? 12345 : o.seed) | 0, t: 0, map: buildMap(lv), mapVer: nextVer(),
       players: [], enemies: [], bullets: [], power: null, events: [], status: 'play', endT: 0, freezeT: 0, shovelT: 0, spawnT: 1, gate: 0,
       queue: [], spawned: 0, killed: 0, birdAlive: true, nextId: 1, twoP: !!o.twoP };
     // enemy queue: scale counts to the difficulty total, then shuffle with the seed
@@ -159,7 +162,7 @@
         else if (c === STEEL) steel = true;
       }
     }
-    if (broke) g.mapVer++;
+    if (broke) g.mapVer = nextVer();
     if (steel && !broke) g.events.push({ t: 'clank', x: b.x, y: b.y, side: b.side });
     return true;
   }
@@ -182,7 +185,7 @@
     if (p.lives > 0) p.respawnT = 1.4; else p.out = true;
   }
   // Never rebuild a fort piece under a tank, so nothing gets stuck inside a wall.
-  function setFort(g, v) { var all = tanks(g); FORT.forEach(function (c) { var hx = c[0] / 2, hy = c[1] / 2; if (all.some(function (t) { return t.x < hx + 0.5 - EPS && t.x + 1 > hx + EPS && t.y < hy + 0.5 - EPS && t.y + 1 > hy + EPS; })) return; g.map[c[1]][c[0]] = v; }); g.mapVer++; }
+  function setFort(g, v) { var all = tanks(g); FORT.forEach(function (c) { var hx = c[0] / 2, hy = c[1] / 2; if (all.some(function (t) { return t.x < hx + 0.5 - EPS && t.x + 1 > hx + EPS && t.y < hy + 0.5 - EPS && t.y + 1 > hy + EPS; })) return; g.map[c[1]][c[0]] = v; }); g.mapVer = nextVer(); }
   function applyPower(g, p, k) {
     p.score += 500; g.events.push({ t: 'pickup', kind: k, x: p.x + 0.5, y: p.y + 0.5, id: p.id });
     if (k === 'star') p.tier = Math.min(3, p.tier + 1);
@@ -335,7 +338,7 @@
       g.enemies = o.enemies.map(function (q) { if (!TYPES[q.type]) throw 0; return { id: fin(q.id, 0, 1e6), kind: 'enemy', type: q.type, x: pos(q.x), y: pos(q.y), dir: DIR(q.dir), hp: fin(q.hp, 1, 4) | 0, maxHp: TYPES[q.type].hp, alive: true,
         spawning: fin(q.spawning, 0, 2), spawnSafe: Math.max(fin(q.spawnSafe, -1e6, 1e6), 1), bonus: q.bonus === true, think: fin(q.think, -1e6, 1e6), cool: Math.max(fin(q.cool, -1e6, 1e6), 1), stuckT: 0, lx: q.x, ly: q.y, tread: 0, moving: false, hitT: 0 }; });
       if (o.power) { if (POWERS.indexOf(o.power.kind) < 0) return null; g.power = { kind: o.power.kind, x: pos(o.power.x), y: pos(o.power.y), t: fin(o.power.t, 0, 30) }; }
-      g.bullets = []; g.mapVer++; return g;
+      g.bullets = []; g.mapVer = nextVer(); return g;
     } catch (e) { return null; }
   }
   function carry(g) { return g.players.map(function (p) { return { lives: Math.max(1, p.lives), tier: p.tier, score: p.score }; }); }

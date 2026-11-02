@@ -3,7 +3,7 @@
 // TK_SINGLE=<file> also writes a single-file test copy (no service worker).
 const fs = require('fs'), path = require('path'), crypto = require('crypto'), { execSync } = require('child_process');
 const r = f => fs.readFileSync(path.join(__dirname, 'src', f), 'utf8');
-const VERSION = 3, DATE = 'Oct 31';
+const VERSION = 4, DATE = 'Oct 31';
 let commit = process.env.COMMIT || ''; if (!commit) { try { commit = execSync('git log -1 --format=%H -- src build.js', { cwd: __dirname, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim(); } catch (e) { commit = 'local00'; } }
 const LABEL = 'v' + VERSION + ' - ' + DATE + ' - ' + commit.slice(0, 7);
 const scripts = ['levels.js', 'engine.js', 'save.js', 'audio.js', 'render.js', 'ui/ui.js'];

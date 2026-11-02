@@ -1,4 +1,4 @@
 { "name": "tank", "version": "1.0.0", "private": true,
   "scripts": { "build": "node build.js", "icons": "node tools/icons.js",
-    "test": "node tests/unit.js && node tests/sim.js && node tools/originality.js && TK_SINGLE=/workspace/tank-test.html node build.js && node tests/browser.js && node tests/browser.js file:///workspace/tank-test.html && node tests/perf.js",
+    "test": "node tests/unit.js && node tests/sim.js && node tools/originality.js && TK_SINGLE=/workspace/tank-test.html node build.js && node tests/browser.js && node tests/browser.js file:///workspace/tank-test.html && node tests/chain.js && node tests/chain.js file:///workspace/tank-test.html && node tests/perf.js",
     "shots": "node build.js && SHOTS=shots node tests/browser.js" } }
