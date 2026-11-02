@@ -105,7 +105,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
   <section id="ov" class="screen dim hidden"><div class="card"><h2 id="ovTitle"></h2><p id="ovText"></p><div class="col" id="ovBtns"></div></div></section>
 </div>
 
-<script>var TK_BUILD = { label: "v3 - Oct 31 - e26df52", id: "9f39f46f" };</script>
+<script>var TK_BUILD = { label: "v4 - Oct 31 - c8f7825", id: "a0b68d76" };</script>
 <script data-src="levels.js">
 // Tank level data. Kept apart from the rules. Each map is 13 rows of 13 tiles.
 // . open   # brick   @ steel   ~ water   % trees   - ice
@@ -451,7 +451,8 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
     easy: { count: 15, lives: 6, speed: 0.75, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 90, bird: 3, soften: 0.8 },
     medium: { count: 18, lives: 6, speed: 0.8, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 60, bird: 3, soften: 0.6,
       last: { speed: 0.88, fire: 2.5, bullet: 0.8, max: 3, chase: 0.08, aim: 0.05, fortStart: 55, soften: 0.5 } }, // values move smoothly from level 1 to the last level
-    hard: { count: 20, lives: 4, speed: 1.0, fire: 1.4, bullet: 0.95, max: 4, chase: 0.2, spawn: 2.4, aim: 0.3, aimBird: true, fortStart: 42, bird: 2 }
+    hard: { count: 18, lives: 5, speed: 0.95, fire: 2.0, bullet: 0.9, max: 3, chase: 0.15, spawn: 2.4, aim: 0.25, aimBird: false, fortStart: 45, bird: 2, soften: 0.3,
+      last: { speed: 0.92, fire: 2.2, chase: 0.14, aim: 0.2, soften: 0.75 } } // Hard: sharp from Level 1, with the enemy mix eased on later levels so it stays winnable (QA v3)
   };
   var POWERS = ['star', 'shield', 'shovel', 'bomb', 'clock', 'tank'];
   var BONUS_RANGES = [[1, 5], [7, 11], [13, 16]]; // one flashing tank is picked at random inside each range
@@ -476,6 +477,8 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
   }
 
   // A difficulty with a 'last' block blends from its level 1 values to the 'last' values across the campaign.
+  // map versions come from one global counter, so no two games or levels ever share a version (QA v3 BLOCKER)
+  var VER = 0; function nextVer() { return ++VER; }
   function ramped(base, lvIdx) {
     var D = {}, k; for (k in base) if (k !== 'last') D[k] = base[k]; if (!base.last) return D;
     var p = lvIdx / Math.max(1, LV.LEVELS.length - 1);
@@ -485,7 +488,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
   function newGame(o) {
     o = o || {};
     var lvIdx = Math.max(0, Math.min(LV.LEVELS.length - 1, o.level | 0)), lv = LV.LEVELS[lvIdx], dname = DIFF[o.difficulty] ? o.difficulty : 'medium', D = ramped(DIFF[dname], lvIdx);
-    var g = { level: lvIdx, name: lv.name, diff: dname, D: D, seed: (o.seed == null ? 12345 : o.seed) | 0, t: 0, map: buildMap(lv), mapVer: 1,
+    var g = { level: lvIdx, name: lv.name, diff: dname, D: D, seed: (o.seed == null ? 12345 : o.seed) | 0, t: 0, map: buildMap(lv), mapVer: nextVer(),
       players: [], enemies: [], bullets: [], power: null, events: [], status: 'play', endT: 0, freezeT: 0, shovelT: 0, spawnT: 1, gate: 0,
       queue: [], spawned: 0, killed: 0, birdAlive: true, nextId: 1, twoP: !!o.twoP };
     // enemy queue: scale counts to the difficulty total, then shuffle with the seed
@@ -589,7 +592,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
         else if (c === STEEL) steel = true;
       }
     }
-    if (broke) g.mapVer++;
+    if (broke) g.mapVer = nextVer();
     if (steel && !broke) g.events.push({ t: 'clank', x: b.x, y: b.y, side: b.side });
     return true;
   }
@@ -612,7 +615,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
     if (p.lives > 0) p.respawnT = 1.4; else p.out = true;
   }
   // Never rebuild a fort piece under a tank, so nothing gets stuck inside a wall.
-  function setFort(g, v) { var all = tanks(g); FORT.forEach(function (c) { var hx = c[0] / 2, hy = c[1] / 2; if (all.some(function (t) { return t.x < hx + 0.5 - EPS && t.x + 1 > hx + EPS && t.y < hy + 0.5 - EPS && t.y + 1 > hy + EPS; })) return; g.map[c[1]][c[0]] = v; }); g.mapVer++; }
+  function setFort(g, v) { var all = tanks(g); FORT.forEach(function (c) { var hx = c[0] / 2, hy = c[1] / 2; if (all.some(function (t) { return t.x < hx + 0.5 - EPS && t.x + 1 > hx + EPS && t.y < hy + 0.5 - EPS && t.y + 1 > hy + EPS; })) return; g.map[c[1]][c[0]] = v; }); g.mapVer = nextVer(); }
   function applyPower(g, p, k) {
     p.score += 500; g.events.push({ t: 'pickup', kind: k, x: p.x + 0.5, y: p.y + 0.5, id: p.id });
     if (k === 'star') p.tier = Math.min(3, p.tier + 1);
@@ -765,7 +768,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
       g.enemies = o.enemies.map(function (q) { if (!TYPES[q.type]) throw 0; return { id: fin(q.id, 0, 1e6), kind: 'enemy', type: q.type, x: pos(q.x), y: pos(q.y), dir: DIR(q.dir), hp: fin(q.hp, 1, 4) | 0, maxHp: TYPES[q.type].hp, alive: true,
         spawning: fin(q.spawning, 0, 2), spawnSafe: Math.max(fin(q.spawnSafe, -1e6, 1e6), 1), bonus: q.bonus === true, think: fin(q.think, -1e6, 1e6), cool: Math.max(fin(q.cool, -1e6, 1e6), 1), stuckT: 0, lx: q.x, ly: q.y, tread: 0, moving: false, hitT: 0 }; });
       if (o.power) { if (POWERS.indexOf(o.power.kind) < 0) return null; g.power = { kind: o.power.kind, x: pos(o.power.x), y: pos(o.power.y), t: fin(o.power.t, 0, 30) }; }
-      g.bullets = []; g.mapVer++; return g;
+      g.bullets = []; g.mapVer = nextVer(); return g;
     } catch (e) { return null; }
   }
   function carry(g) { return g.players.map(function (p) { return { lives: Math.max(1, p.lives), tier: p.tier, score: p.score }; }); }
@@ -870,7 +873,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
 // Tank renderer. Everything is drawn in code at devicePixelRatio for crisp, detailed art. All art is original.
 (function (root) {
   var E = root.TK.Engine, N = 13;
-  var maxDpr = 3, sprites = {}, vign = null, treeRects = [], cv, cx, W = 0, T = 0, dpr = 1, terr = null, terrVer = -1, trees = null, treeVer = -1, parts = [], floats = [], shake = 0, flashes = [], frames = 0, lastG = null, reduce = false;
+  var maxDpr = 3, sprites = {}, vign = null, treeRects = [], cv, cx, W = 0, T = 0, dpr = 1, terr = null, terrVer = -1, terrMap = null, trees = null, treeVer = -1, treeMap = null, parts = [], floats = [], shake = 0, flashes = [], frames = 0, lastG = null, reduce = false;
   function hash(x, y) { var h = (x * 374761393 + y * 668265263) | 0; h = (h ^ (h >>> 13)) * 1274126177; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
   function rr(c, x, y, w, h, r) { c.beginPath(); c.moveTo(x + r, y); c.arcTo(x + w, y, x + w, y + h, r); c.arcTo(x + w, y + h, x, y + h, r); c.arcTo(x, y + h, x, y, r); c.arcTo(x, y, x + w, y, r); c.closePath(); }
   function lg(c, x0, y0, x1, y1, stops) { var g = c.createLinearGradient(x0, y0, x1, y1); stops.forEach(function (s, i) { g.addColorStop(s[0], s[1]); }); return g; }
@@ -889,7 +892,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
   function setup(canvas) { cv = canvas; cx = cv.getContext('2d'); }
   function resize(css) {
     dpr = Math.min(maxDpr, root.devicePixelRatio || 1); var px = Math.max(26, Math.floor(css * dpr / 26) * 26); // round DOWN so the board never overflows
-    if (px !== W) { W = px; T = W / N; cv.width = cv.height = W; terrVer = treeVer = -1; resetSprites(); }
+    if (px !== W) { W = px; T = W / N; cv.width = cv.height = W; invalidate(); resetSprites(); }
     cv.style.width = cv.style.height = (W / dpr) + 'px'; return W / dpr;
   }
 
@@ -976,14 +979,16 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
     var vg = c.createRadialGradient(W / 2, W / 2, W * 0.45, W / 2, W / 2, W * 0.75); vg.addColorStop(0, 'rgba(0,0,0,0)'); vg.addColorStop(1, 'rgba(0,0,0,0.3)'); c.fillStyle = vg; c.fillRect(0, 0, W, W);
     // gate marks
     E.GATES.forEach(function (p) { c.strokeStyle = 'rgba(255,90,70,0.25)'; c.lineWidth = Math.max(1, T * 0.03); c.setLineDash([T * 0.1, T * 0.08]); c.strokeRect(p[0] * T + T * 0.08, p[1] * T + T * 0.08, T * 0.84, T * 0.84); c.setLineDash([]); });
-    terrVer = g.mapVer;
+    terrVer = g.mapVer; terrMap = g.map;
   }
+  // terrain and tree caches are keyed to the map object itself AND its version: a new game or level has a new map
+  function invalidate() { terrVer = treeVer = -1; terrMap = treeMap = null; }
   function buildTrees(g) {
     if (!trees) trees = document.createElement('canvas'); if (trees.width !== W) trees.width = trees.height = W;
     var c = trees.getContext('2d'); c.clearRect(0, 0, W, W);
     for (var y = 0; y < 26; y++) for (var x = 0; x < 26; x++) if (g.map[y][x] === E.TREES) drawTreeCell(c, x, y);
     treeRects = []; for (var ty = 0; ty < N; ty++) for (var tx = 0; tx < N; tx++) { var any = false; for (var k = 0; k < 4; k++) if (g.map[ty * 2 + (k >> 1)][tx * 2 + (k & 1)] === E.TREES) any = true; if (any) treeRects.push(tx, ty); }
-    treeVer = g.mapVer;
+    treeVer = g.mapVer; treeMap = g.map;
   }
   function drawWater(c, g, t) {
     var h = T / 2; c.strokeStyle = 'rgba(190,235,255,0.55)'; c.lineWidth = Math.max(1, h * 0.06); c.beginPath(); var dots = [];
@@ -1122,8 +1127,8 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
   // ---------- frame ----------
   function frame(g, dt, paused) {
     frames++; var c = cx, t = g.t, s = T; if (!W) return;
-    if (terrVer !== g.mapVer || !terr) buildTerrain(g);
-    if (treeVer !== g.mapVer || !trees) buildTrees(g);
+    if (terrVer !== g.mapVer || terrMap !== g.map || !terr) buildTerrain(g);
+    if (treeVer !== g.mapVer || treeMap !== g.map || !trees) buildTrees(g);
     c.save();
     if (reduce) shake = 0;
     if (shake > 0 && !paused) { shake = Math.max(0, shake - dt); var m = shake * s * 0.5; c.translate((Math.random() - 0.5) * m, (Math.random() - 0.5) * m); }
@@ -1172,7 +1177,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
   function setMaxDpr(v) { maxDpr = v; }
   function setReduce(v) { reduce = !!v; }
   function stats() { return { w: W, dpr: dpr, frames: frames, parts: parts.length + flashes.length, reduce: reduce, maxDpr: maxDpr, sprites: Object.keys(sprites).length }; }
-  root.TK.Render = { setup: setup, resize: resize, frame: frame, onEvents: onEvents, drawIcon: drawIcon, drawTank: drawTank, drawPower: drawPower, drawBird: drawBird, stats: stats, setReduce: setReduce, setMaxDpr: setMaxDpr, boom: boom };
+  root.TK.Render = { setup: setup, resize: resize, frame: frame, onEvents: onEvents, drawIcon: drawIcon, drawTank: drawTank, drawPower: drawPower, drawBird: drawBird, stats: stats, setReduce: setReduce, setMaxDpr: setMaxDpr, boom: boom, invalidate: invalidate };
 })(this);
 </script>
 <script data-src="ui/ui.js">
@@ -1292,11 +1297,11 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
   function act(a, v) {
     switch (a) {
       case 'play': var two = v === '2'; startLevel(0, null, two, data.settings.difficulty, 0); break;
-      case 'continue': if (data.run) { data.settings.difficulty = data.run.difficulty; var rg = data.run.snap ? E.restore(data.run.snap) : null; if (rg && rg.level === data.run.level) { st.twoP = rg.twoP; st.g = rg; st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start'); } else startLevel(data.run.level, data.run.carry, data.run.twoP, data.run.difficulty, data.run.attempt); } break;
+      case 'continue': if (data.run) { data.settings.difficulty = data.run.difficulty; var rg = data.run.snap ? E.restore(data.run.snap) : null; if (rg && rg.level === data.run.level) { st.twoP = rg.twoP; st.g = rg; R.invalidate(); st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start'); } else startLevel(data.run.level, data.run.carry, data.run.twoP, data.run.difficulty, data.run.attempt); } break;
       case 'diff': data.settings.difficulty = v; save(); refreshHome(); break;
       case 'mute': data.settings.muted = !data.settings.muted; save(); refreshMute(); break;
       case 'help': show('help'); break;
-      case 'home': st.g = null; st.paused = false; show('home'); break;
+      case 'home': st.g = null; R.invalidate(); st.paused = false; show('home'); break;
       case 'pause': pause(); break;
       case 'resume': resume(); break;
       case 'restart': var r = data.run; if (r) startLevel(r.level, r.carry, r.twoP, r.difficulty, r.attempt + 1); break;
@@ -1307,7 +1312,7 @@ body.blocked .dpad,body.blocked .fire{display:none!important}
   function startLevel(level, carry, twoP, diff, attempt) {
     st.twoP = twoP; attempt = attempt || 0;
     var seed = (level + 1) * 7919 + attempt * 104729 + (twoP ? 13 : 0);
-    st.g = E.newGame({ level: level, difficulty: diff, twoP: twoP, carry: carry, seed: seed });
+    st.g = E.newGame({ level: level, difficulty: diff, twoP: twoP, carry: carry, seed: seed }); R.invalidate();
     data.run = { level: level, difficulty: st.g.diff, twoP: twoP, attempt: attempt, carry: E.carry(st.g), snap: null }; save();
     st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start');
   }
