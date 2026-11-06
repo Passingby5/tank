@@ -1,7 +1,7 @@
 // Versioned save. Wrong version, broken JSON or bad fields are ignored safely.
 (function (root) {
-  var KEY = 'tank_save', VERSION = 2, DIFFS = ['easy', 'medium', 'hard'];
-  function fresh() { return { v: VERSION, run: null, best: 0, settings: { muted: false, difficulty: 'easy' } }; }
+  var KEY = 'tank_save', VERSION = 3, DIFFS = ['easy', 'medium', 'hard'];
+  function fresh() { return { v: VERSION, run: null, best: 0, settings: { muted: false, difficulty: 'hard' } }; }
   function int(v, lo, hi) { if (typeof v !== 'number' || !isFinite(v) || Math.floor(v) !== v) throw 0; return Math.max(lo, Math.min(hi, v)); }
   function cleanRun(r, nLevels) {
     try {
@@ -15,7 +15,7 @@
   }
   function read(st, nLevels) {
     var d = fresh();
-    try { var raw = st.getItem(KEY); if (!raw) return d; var o = JSON.parse(raw); if (!o || typeof o !== 'object' || (o.v !== VERSION && o.v !== 1)) return d; // v1 saves (no mid-level snapshot) are still read
+    try { var raw = st.getItem(KEY); if (!raw) return d; var o = JSON.parse(raw); if (!o || typeof o !== 'object' || (o.v !== VERSION && o.v !== 1 && o.v !== 2)) return d; // older saves keep their difficulty; only brand-new installs default to Hard
       if (o.settings && typeof o.settings === 'object') { d.settings.muted = o.settings.muted === true; if (DIFFS.indexOf(o.settings.difficulty) >= 0) d.settings.difficulty = o.settings.difficulty; }
       d.best = typeof o.best === 'number' && isFinite(o.best) ? Math.max(0, Math.floor(o.best)) : 0;
       d.run = cleanRun(o.run, nLevels);

@@ -14,7 +14,7 @@
   function fireSprite() { return FIRE || (FIRE = sprite('fire', 64, function (c, w) { var g = c.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, 'rgba(255,240,180,1)'); g.addColorStop(0.5, 'rgba(255,120,30,0.8)'); g.addColorStop(1, 'rgba(200,40,0,0)'); c.fillStyle = g; c.fillRect(0, 0, w, w); })); }
   function flashSprite() { return FLASH || (FLASH = sprite('flash', 128, function (c, w) { var g = c.createRadialGradient(w / 2, w / 2, 0, w / 2, w / 2, w / 2); g.addColorStop(0, 'rgba(255,255,230,1)'); g.addColorStop(0.35, 'rgba(255,190,60,0.9)'); g.addColorStop(0.7, 'rgba(230,70,20,0.6)'); g.addColorStop(1, 'rgba(120,20,0,0)'); c.fillStyle = g; c.fillRect(0, 0, w, w); })); }
   function tankSprite(kind, dir, tread, opt) {
-    var ph = Math.floor(((tread * 0.9 / 0.11) % 1 + 1) % 1 * 4), key = 't' + kind + dir + ph + (opt.bonus ? 'b' : '') + (kind === 'a' ? opt.hp : '');
+    var ph = Math.floor(((tread * 0.9 / 0.11) % 1 + 1) % 1 * 4), key = 't' + kind + dir + ph + (opt.bonus ? 'b' : '') + (opt.sprint ? 's' : '') + (kind === 'a' ? opt.hp : '');
     return sprite(key, T * 1.3, function (c, w) { drawTank(c, T * 0.15, T * 0.15, T, dir, kind, ph * 0.11 / 0.9 / 4, opt); });
   }
   function setup(canvas) { cv = canvas; cx = cv.getContext('2d'); }
@@ -133,11 +133,12 @@
     p0: ['#fff0a6', '#f2b92c', '#a86a0c', '#5a3a06'], p1: ['#c8ffd0', '#3fcf6c', '#1c7d3c', '#0b3f1d'],
     b: ['#e6ebf2', '#9aa6b6', '#5b6676', '#2d3440'], f: ['#ffd5cf', '#e0614f', '#9c2e22', '#4f130d'],
     r: ['#e6d5ff', '#9a6be0', '#5c3699', '#2b1550'], a: ['#d9f0c8', '#7f9c64', '#4c6638', '#24331a'],
-    bonus: ['#ffe0e0', '#ff4a4a', '#b01818', '#5a0808']
+    bonus: ['#ffe0e0', '#ff4a4a', '#b01818', '#5a0808'],
+    sprint: ['#fff4b8', '#ffb020', '#c46a00', '#6a3200']
   };
   var ANG = { u: 0, r: Math.PI / 2, d: Math.PI, l: -Math.PI / 2 };
   function drawTank(c, x, y, s, dir, kind, tread, opt) {
-    opt = opt || {}; var P = PAL[kind] || PAL.b; if (opt.bonus) P = PAL.bonus;
+    opt = opt || {}; var P = PAL[kind] || PAL.b; if (opt.bonus) P = PAL.bonus; else if (opt.sprint) P = PAL.sprint;
     c.save(); c.translate(x + s / 2, y + s / 2); c.rotate(ANG[dir] || 0);
     var hw = s / 2, slim = kind === 'f', big = kind === 'a';
     // shadow
@@ -271,7 +272,7 @@
     g.enemies.forEach(function (e) {
       if (e.spawning > 0) { var k = 1 - e.spawning; c.save(); c.translate((e.x + 0.5) * s, (e.y + 0.5) * s); c.rotate(t * 6); c.fillStyle = 'rgba(255,255,255,0.9)'; var r = s * (0.25 + 0.25 * Math.abs(Math.sin(k * 9)));
         c.beginPath(); for (var i = 0; i < 8; i++) { var a = i * Math.PI / 4, rad = i % 2 ? r * 0.3 : r; c.lineTo(Math.cos(a) * rad, Math.sin(a) * rad); } c.closePath(); c.fill(); c.restore(); return; }
-      var sp = tankSprite(e.type, e.dir, e.tread, { bonus: e.bonus && Math.floor(t * 5) % 2 === 0, hp: e.hp }); c.drawImage(sp, e.x * s - s * 0.15, e.y * s - s * 0.15);
+      var sp = tankSprite(e.type, e.dir, e.tread, { bonus: e.bonus && Math.floor(t * 5) % 2 === 0, sprint: !!e.sprint && !(e.bonus && Math.floor(t * 5) % 2 === 0), hp: e.hp }); c.drawImage(sp, e.x * s - s * 0.15, e.y * s - s * 0.15);
       if (e.hitT > 0 || g.freezeT > 0) { c.fillStyle = e.hitT > 0 ? 'rgba(255,255,255,0.45)' : 'rgba(140,210,255,0.35)'; rr(c, e.x * s + s * 0.04, e.y * s + s * 0.04, s * 0.92, s * 0.92, s * 0.1); c.fill(); }
     });
     g.players.forEach(function (p) {

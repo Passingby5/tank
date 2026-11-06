@@ -1,7 +1,7 @@
 # Tank: design doc (v2)
 
 ## Idea
-A top-down 2D tank game for families. You drive a tank through a walled maze and protect a golden bird that sits in a small brick fort at the bottom of the map. Enemy tanks roll in from three gates at the top. Stop all of them to clear the level. It is inspired by classic arcade tank games, but every tank, the bird, the levels, the sounds and the music are original.
+A top-down 2D tank game for advanced players who want reflection, anticipation and coordination. You drive a tank through a walled maze and protect a golden bird that sits in a small brick fort at the bottom of the map. Enemy tanks roll in from three gates at the top. Stop all of them to clear the level. It is inspired by classic arcade tank games, but every tank, the bird, the levels, the sounds and the music are original.
 
 ## Look
 Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixelRatio, so it stays sharp on phones. Bricks have mortar and shading, steel has bevels and rivets, water moves, trees sway a little and hide tanks, ice shines. Tanks have rolling treads, a shaded hull and turret, a muzzle flash when they fire, and explosions with fireballs, sparks, smoke and a shock ring.
@@ -9,26 +9,27 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 ## Rules
 - The map is 13 x 13 tiles. Each tile is split into 2 x 2 half tiles, so brick can be chipped away a piece at a time.
 - Brick: blocks tanks and shots, a shot breaks the strip it hits. Steel: blocks everything, only a 3-star gun breaks it. Water: blocks tanks, shots fly over. Trees: tanks drive under them and are hidden. Ice: your tank slides a little after you let go.
-- Enemies: basic, fast, rapid-fire and armored (takes 4 hits). 15 per level on Easy, 18 on Medium and Hard; at most 2 / 3 / 3 on the map at once (Medium starts at 2). They spawn from 3 gates.
-- Three enemies per level flash red, picked at random inside the ranges 2-6, 8-12 and 14-17. Hitting it drops a power-up: star (gun upgrade, up to 3 stars), shield, shovel (steel fort for a while), bomb (all enemies on the map blow up), clock (enemies freeze), tank (extra life).
-- The bird sits behind a two layer brick fort that starts as steel (Easy 90 s, Medium 45 s, Hard 42 s). The bird takes 3 enemy hits on Easy and Medium and 2 on Hard. If all players run out of lives, the level is lost.
-- Easy, Medium and Hard change enemy count, speed, aim, fire rate, bullet speed, lives (6 / 6 / 5) and bird hits. Easy is the default on first run. Easy and Medium swap some armored and rapid-fire tanks for basic ones. Medium starts gentle on Level 1 and ramps smoothly to its full strength on the last level; Hard is sharp from Level 1 (faster, better aim, quicker fire) and eases its enemy mix on later levels so a strong player can still win. All three keep a little extra help on levels 1-5.
+- Enemies: basic, fast, rapid-fire and armored (takes 4 hits). Quotas: 20 on levels 1-5, 25 on 6-14, 30 on 15-22. At most 3 on the map early, up to 4 on the last five levels. They spawn from 3 gates with fast staggered timing, randomized gate choice, and anti-camp preference away from a player camping the top.
+- Three enemies per level flash red (ranges scale with the quota). Hitting one drops a power-up: star, shield, shovel (steel fort ~16 s), bomb, clock, tank.
+- Occasional non-armored sprint runners move unusually fast but stay lead-shotable (speed capped).
+- The bird sits behind a two layer brick fort that starts as brick. Shovel turns it to steel for about 16 seconds, then brick again. The bird takes 3 enemy hits on Easy, Medium and Hard.
+- Easy, Medium and Hard change speed, aim, fire rate, bullet speed, lives (6 / 6 / 5) and bird hits. Hard is the default on a brand-new install; existing saved difficulty choices are preserved. Fire rate speeds up across the campaign on every mode; Hard does not soften late. Last five levels are the toughest.
 - 2 players on one device: keyboard W A S D + Space and Arrows + Enter, or a split touch pad in landscape.
 
 ## Tech
 - Plain JavaScript, no libraries. src/levels.js (data), src/engine.js (pure rules, seeded RNG, fixed 60 Hz steps, runs in Node), src/render.js (canvas art), src/audio.js (WebAudio), src/save.js (versioned save), src/ui/ (screens and controls).
 - build.js makes site/ (single page PWA with manifest, icons, network-first service worker, version.json) and an optional single file test copy.
-- Version label on the home screen: "v4 - Oct 31 - <commit>".
+- Version label on the home screen: "v5 - Nov 6 - <commit>".
 
 ## Acceptance checklist
-1. Home screen shows title, Play (1 player), 2 Players, Easy/Medium/Hard, How to Play, Sound toggle and the label "v4 - Oct 31 - <7 char commit>".
+1. Home screen shows title, Play (1 player), 2 Players, Easy/Medium/Hard (Hard selected by default on a new install), How to Play, Sound toggle and the label "v5 - Nov 6 - <7 char commit>".
 2. Continue appears only when a valid save exists.
 3. levels.js holds at least 20 levels, each 13 rows of 13 valid tile characters, kept apart from engine code.
 4. In every level each enemy gate and each player spawn can reach the bird by a path that only goes through open ground or brick.
 5. Brick breaks in half tile strips; steel stops normal shots; a 3-star shot breaks steel.
 6. Water blocks tanks but not shots; trees do not block tanks or shots and are drawn over tanks; ice makes the player slide after letting go.
 7. An enemy shot that hits the bird ends the level as lost. Your own shots can not hurt the bird (kid friendly).
-8. Enemy count per level is 15 / 18 / 18 (Easy / Medium / Hard); at most 2 / 3 / 3 are alive at once; they spawn from 3 gates.
+8. Enemy quotas are 20 / 25 / 30 by level band; at most 3 alive early and 4 on the last five; fast staggered spawns from 3 gates with anti-camp gate preference.
 9. Four enemy types exist with different speed, fire rate and hit points (armored needs 4 hits).
 10. Three flashing enemies per level, at random spots inside fixed ranges (not the 4th/11th/18th), drop a power-up when hit.
 11. Each of the six power-ups does its job: star raises gun tier (max 3), shield blocks hits, shovel turns the fort to steel and back, bomb clears all enemies on the map, clock freezes enemies, tank adds a life.
@@ -67,3 +68,12 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 ## v4 additions (QA v3 report)
 - BLOCKER fixed: the board always shows the current level. Map versions come from one global counter, the renderer's terrain and tree caches are keyed to the map object as well as its version, and they are cleared on every new game, level, Continue, restore and Home. tests/chain.js plays Next, Home, Play, Continue and reload + restore in ONE page and compares the board pixels with a fresh render of each level.
 - Hard ramps: the pro model wins at least 20% of every Hard level (per-level gate in npm test), and Hard stays clearly harder than Medium for both player models.
+
+
+## v5 additions (Tom Nov 6)
+- Bird fort starts as brick on every difficulty; shovel steels it for 16 s then restores brick.
+- Faster staggered spawns (not a simultaneous triple burst), randomized free-gate choice, visible short spawn flash (no hits, no firing), then brief fire-only lock. Never spawn on the player. Prefer gates away from a top camper.
+- Fire rate increases by level; Hard soften never rises late; last five levels allow 4 active enemies and stay the hardest band.
+- Occasional distinct sprint runners (speed capped at 5).
+- Quotas 20 (L1-5) / 25 (L6-14) / 30 (L15-22). Hard default for new installs; old saves keep their difficulty.
+- Fairness sims use skilled mobile vs top-camp strategies instead of kid-win ease gates.

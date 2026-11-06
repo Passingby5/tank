@@ -17,13 +17,21 @@
   };
   // Tuned after QA v1: kid-friendly Easy, beatable Medium, challenging Hard. bird = hits the bird can take.
   // fire = enemy fire interval multiplier, bullet = enemy bullet speed multiplier.
+  // v5: advanced baseline. fortStart 0 = brick housing. fire falls (faster shots) across the campaign. No late Hard softening.
   var DIFF = {
-    easy: { count: 15, lives: 6, speed: 0.75, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 90, bird: 3, soften: 0.8 },
-    medium: { count: 18, lives: 6, speed: 0.8, fire: 3.0, bullet: 0.75, max: 2, chase: 0.06, spawn: 2.6, aim: 0, aimBird: false, fortStart: 60, bird: 3, soften: 0.6,
-      last: { speed: 0.88, fire: 2.5, bullet: 0.8, max: 3, chase: 0.08, aim: 0.05, fortStart: 55, soften: 0.5 } }, // values move smoothly from level 1 to the last level
-    hard: { count: 18, lives: 5, speed: 0.95, fire: 2.0, bullet: 0.9, max: 3, chase: 0.15, spawn: 2.4, aim: 0.25, aimBird: false, fortStart: 45, bird: 2, soften: 0.3,
-      last: { speed: 0.92, fire: 2.2, chase: 0.14, aim: 0.2, soften: 0.75 } } // Hard: sharp from Level 1, with the enemy mix eased on later levels so it stays winnable (QA v3)
+    easy: { lives: 6, speed: 0.82, fire: 2.55, bullet: 0.8, max: 3, chase: 0.06, spawn: 1.45, aim: 0.03, aimBird: false, fortStart: 0, bird: 3, soften: 0.58,
+      last: { speed: 0.9, fire: 1.95, bullet: 0.85, chase: 0.09, aim: 0.07, soften: 0.42 } },
+    medium: { lives: 6, speed: 0.88, fire: 2.25, bullet: 0.84, max: 3, chase: 0.1, spawn: 1.25, aim: 0.1, aimBird: false, fortStart: 0, bird: 3, soften: 0.4,
+      last: { speed: 0.95, fire: 1.55, bullet: 0.9, max: 3, chase: 0.14, aim: 0.18, soften: 0.25 } },
+    hard: { lives: 6, speed: 0.94, fire: 1.95, bullet: 0.9, max: 3, chase: 0.12, spawn: 1.2, aim: 0.18, aimBird: false, fortStart: 0, bird: 3, soften: 0.28,
+      last: { speed: 1.0, fire: 1.35, bullet: 0.95, max: 4, chase: 0.18, aim: 0.28, soften: 0.14, spawn: 1.0 } }
   };
+  function levelQuota(lvIdx) { return lvIdx <= 4 ? 20 : lvIdx <= 13 ? 25 : 30; }
+  function bonusRanges(n) {
+    if (n <= 20) return [[1, 5], [7, 11], [13, 16]];
+    if (n <= 25) return [[1, 6], [8, 14], [16, 22]];
+    return [[2, 8], [10, 18], [20, 27]];
+  }
   var POWERS = ['star', 'shield', 'shovel', 'bomb', 'clock', 'tank'];
   var BONUS_RANGES = [[1, 5], [7, 11], [13, 16]]; // one flashing tank is picked at random inside each range
   var PLAYER_SPEED = 3.3, EPS = 1e-6;
@@ -50,9 +58,12 @@
   // map versions come from one global counter, so no two games or levels ever share a version (QA v3 BLOCKER)
   var VER = 0; function nextVer() { return ++VER; }
   function ramped(base, lvIdx) {
-    var D = {}, k; for (k in base) if (k !== 'last') D[k] = base[k]; if (!base.last) return D;
+    var D = {}, k; for (k in base) if (k !== 'last') D[k] = base[k]; if (!base.last) { D.count = levelQuota(lvIdx); return D; }
     var p = lvIdx / Math.max(1, LV.LEVELS.length - 1);
     for (k in base.last) { var v = base[k] + (base.last[k] - base[k]) * p; D[k] = (k === 'max' || k === 'bird') ? Math.round(v) : v; }
+    D.count = levelQuota(lvIdx);
+    // last five levels: up to four enemies on the map
+    if (lvIdx >= LV.LEVELS.length - 5) D.max = Math.max(D.max | 0, 4);
     return D;
   }
   function newGame(o) {
@@ -71,8 +82,8 @@
     for (var i = q.length - 1; i > 0; i--) { var j = Math.floor(rng(g) * (i + 1)), t = q[i]; q[i] = q[j]; q[j] = t; }
     // armored tanks lean toward the back of the line so the level ramps up
     q.sort(function (a, b) { return (a === 'a') - (b === 'a'); }); for (i = 0; i < q.length - 1; i++) if (rng(g) < 0.35) { t = q[i]; q[i] = q[i + 1]; q[i + 1] = t; }
-    g.queue = q; g.bonusAt = BONUS_RANGES.map(function (r) { return Math.min(q.length - 1, r[0] + Math.floor(rng(g) * (r[1] - r[0] + 1))); });
-    g.ramp = 1 + Math.max(0, 5 - lvIdx) * 0.08; g.rampSpeed = 1 - Math.max(0, 5 - lvIdx) * 0.025; // levels 1-5 are gentler
+    g.queue = q; g.bonusAt = bonusRanges(q.length).map(function (r) { return Math.min(q.length - 1, r[0] + Math.floor(rng(g) * (r[1] - r[0] + 1))); });
+    g.ramp = 1; g.rampSpeed = 1; // v5: difficulty ramp lives in DIFF.last, not an early-level fire cushion
     g.birdHp = D.bird; g.birdMax = D.bird; g.birdHitT = 0;
     var carry = o.carry || [];
     for (var p = 0; p < (g.twoP ? 2 : 1); p++) {
@@ -80,6 +91,8 @@
       g.players.push({ id: p, kind: 'player', x: PSPAWN[p][0], y: PSPAWN[p][1], dir: 'u', lives: c.lives > 0 ? c.lives : D.lives, tier: c.tier | 0, score: c.score | 0, alive: true, out: false,
         shieldT: 3, respawnT: 0, cool: 0, slide: 0, moving: false, tread: 0, kills: 0 });
     }
+    // v5: bird housing starts as brick. Shovel alone turns it to steel for a short time.
+    g.shovelT = 0;
     if (D.fortStart) { g.shovelT = D.fortStart; setFort(g, STEEL); }
     return g;
   }
@@ -197,16 +210,34 @@
   }
 
   function spawnEnemy(g) {
-    for (var k = 0; k < 3; k++) {
-      var gi = (g.gate + k) % 3, s = GATES[gi], x = s[0], y = s[1], probe = { x: -9, y: -9 };
-      if (!free(g, probe, x, y)) continue;
-      var type = g.queue[g.spawned], T = TYPES[type];
-      g.enemies.push({ id: g.nextId++, kind: 'enemy', type: type, x: x, y: y, dir: 'd', hp: T.hp, maxHp: T.hp, alive: true, spawning: 1.0, bonus: g.bonusAt.indexOf(g.spawned) >= 0,
-        think: 0.5, cool: 0.8 + rng(g) * T.fire, stuckT: 0, lx: x, ly: y, tread: 0, moving: false, hitT: 0 });
-      g.spawned++; g.gate = (gi + 1) % 3; g.events.push({ t: 'spawn', x: x + 0.5, y: y + 0.5 });
-      return true;
+    if (g.spawned >= g.queue.length) return false;
+    // Shuffle gates, then prefer free gates farther from a player camping near the top (anti-camp, still fair).
+    var order = [0, 1, 2], i, j, tmp;
+    for (i = 2; i > 0; i--) { j = Math.floor(rng(g) * (i + 1)); tmp = order[i]; order[i] = order[j]; order[j] = tmp; }
+    var scored = [], probe = { x: -9, y: -9 };
+    for (i = 0; i < 3; i++) {
+      var gi = order[i], s = GATES[gi], x = s[0], y = s[1];
+      if (!free(g, probe, x, y)) continue; // never spawn on a tank / player
+      var danger = 0;
+      g.players.forEach(function (p) {
+        if (!p.alive) return;
+        var dist = Math.abs(p.x - x) + Math.abs(p.y - y);
+        if (p.y < 3.5) danger += Math.max(0, 5 - dist) * 2.5; // camping the top row is costly for that gate
+        else danger += Math.max(0, 2.2 - dist);
+      });
+      scored.push({ gi: gi, x: x, y: y, danger: danger });
     }
-    return false;
+    if (!scored.length) return false;
+    scored.sort(function (a, b) { return a.danger - b.danger || a.gi - b.gi; });
+    var pick = scored[0];
+    if (scored.length > 1 && rng(g) < 0.3) pick = scored[1 + Math.floor(rng(g) * (scored.length - 1))];
+    var type = g.queue[g.spawned], T = TYPES[type];
+    var sprint = type !== 'a' && rng(g) < 0.15; // occasional fast runner, still shootable
+    g.enemies.push({ id: g.nextId++, kind: 'enemy', type: type, x: pick.x, y: pick.y, dir: 'd', hp: T.hp, maxHp: T.hp, alive: true,
+      spawning: 1.15, spawnSafe: 0, bonus: g.bonusAt.indexOf(g.spawned) >= 0, sprint: sprint, exitBoost: 1.35,
+      think: 0.35, cool: 1.0 + rng(g) * T.fire, stuckT: 0, lx: pick.x, ly: pick.y, tread: 0, moving: false, hitT: 0 });
+    g.spawned++; g.gate = (pick.gi + 1) % 3; g.events.push({ t: 'spawn', x: pick.x + 0.5, y: pick.y + 0.5 });
+    return true;
   }
   function chooseDir(g, e, avoid) {
     var D = g.D, r = rng(g), opts = DLIST.filter(function (d) { return d !== avoid; }), dir;
@@ -219,13 +250,17 @@
       var p = g.players.filter(function (q) { return q.alive; })[0], px = p.x - e.x, py = p.y - e.y;
       dir = Math.abs(px) > Math.abs(py) ? (px > 0 ? 'r' : 'l') : (py > 0 ? 'd' : 'u'); if (dir === avoid) dir = pick(g, opts);
     } else { var w = opts.concat(opts.indexOf('d') >= 0 ? ['d'] : []); dir = pick(g, w); }
+    if (e.exitBoost > 0 && opts.indexOf('d') >= 0) dir = 'd';
     return dir;
   }
   function enemyAI(g, e, dt) {
     var T = TYPES[e.type], D = g.D;
     if (g.freezeT > 0) { e.moving = false; return; }
     e.think -= dt; e.cool -= dt;
-    var moved = move(g, e, e.dir, T.speed * D.speed * g.rampSpeed * dt); e.moving = moved > 0; if (moved) e.tread += moved;
+    if (e.exitBoost > 0) { e.exitBoost = Math.max(0, e.exitBoost - dt); if (e.dir !== 'd') turn(g, e, 'd'); }
+    var spd = T.speed * D.speed * g.rampSpeed * (e.sprint ? 1.4 : 1);
+    if (spd > 5.0) spd = 5.0; // still lead-shotable vs player bullets (9+)
+    var moved = move(g, e, e.dir, spd * dt); e.moving = moved > 0; if (moved) e.tread += moved;
     if (Math.abs(e.x - e.lx) + Math.abs(e.y - e.ly) > 0.05) { e.stuckT = 0; e.lx = e.x; e.ly = e.y; } else e.stuckT += dt;
     var aligned = Math.abs(e.x * 2 - Math.round(e.x * 2)) < 0.03 && Math.abs(e.y * 2 - Math.round(e.y * 2)) < 0.03 && Math.abs(e.x - Math.round(e.x)) < 0.03 && Math.abs(e.y - Math.round(e.y)) < 0.03;
     if (!moved) {
@@ -271,10 +306,14 @@
     // enemies
     var alive = g.enemies.filter(function (e) { return e.alive; });
     g.spawnT -= dt;
-    if (g.spawnT <= 0 && g.spawned < g.queue.length && alive.length < g.D.max) { if (spawnEnemy(g)) g.spawnT = g.D.spawn; else g.spawnT = 0.3; }
+    // Faster staggered spawns (not a simultaneous triple burst): one tank per tick when under the concurrent cap.
+    if (g.spawnT <= 0 && g.spawned < g.queue.length && alive.length < g.D.max) {
+      if (spawnEnemy(g)) g.spawnT = g.D.spawn; else g.spawnT = 0.25;
+    }
     g.enemies.forEach(function (e) {
       if (!e.alive) return; if (e.hitT > 0) e.hitT -= dt;
-      if (e.spawning > 0) { e.spawning -= dt; if (e.spawning <= 0) { e.spawning = 0; e.spawnSafe = 0.6; } return; }
+      // Visible spawn flash: cannot be hit and cannot fire. After that, briefly cannot fire only (fair, no invisible god-mode).
+      if (e.spawning > 0) { e.spawning -= dt; if (e.spawning <= 0) { e.spawning = 0; e.spawnSafe = 0.55; } return; }
       if (e.spawnSafe > 0) e.spawnSafe -= dt;
       enemyAI(g, e, dt);
     });
@@ -315,7 +354,7 @@
     var o = { v: 1, level: g.level, diff: g.diff, twoP: g.twoP, map: g.map.map(function (r) { return r.join(''); }), queue: g.queue.join(''), bonusAt: g.bonusAt.slice(), birdAlive: g.birdAlive,
       power: g.power ? { kind: g.power.kind, x: g.power.x, y: g.power.y, t: g.power.t } : null,
       players: g.players.map(function (p) { return { x: p.x, y: p.y, dir: p.dir, lives: p.lives, tier: p.tier, score: p.score, alive: p.alive, out: p.out, shieldT: p.shieldT, respawnT: p.respawnT, kills: p.kills }; }),
-      enemies: g.enemies.filter(function (e) { return e.alive; }).map(function (e) { return { id: e.id, type: e.type, x: e.x, y: e.y, dir: e.dir, hp: e.hp, spawning: e.spawning, spawnSafe: e.spawnSafe || 0, bonus: e.bonus, think: e.think, cool: e.cool }; }) };
+      enemies: g.enemies.filter(function (e) { return e.alive; }).map(function (e) { return { id: e.id, type: e.type, x: e.x, y: e.y, dir: e.dir, hp: e.hp, spawning: e.spawning, spawnSafe: e.spawnSafe || 0, bonus: e.bonus, sprint: !!e.sprint, exitBoost: Math.max(0, e.exitBoost || 0), think: e.think, cool: e.cool }; }) };
     NUMS.forEach(function (k) { o[k] = g[k]; }); return o;
   }
   function restore(o) {
@@ -334,9 +373,10 @@
       if (!Array.isArray(o.players) || o.players.length !== g.players.length) return null;
       o.players.forEach(function (q, i) { var p = g.players[i]; p.x = pos(q.x); p.y = pos(q.y); p.dir = DIR(q.dir); p.lives = fin(q.lives, 0, 9) | 0; p.tier = fin(q.tier, 0, 3) | 0; p.score = fin(q.score, 0, 1e8) | 0;
         p.alive = q.alive === true; p.out = q.out === true; p.shieldT = Math.max(fin(q.shieldT, 0, 99), 2); p.respawnT = fin(q.respawnT, -1e6, 9); p.kills = fin(q.kills, 0, 999) | 0; });
-      if (!Array.isArray(o.enemies) || o.enemies.length > 6) return null;
+      if (!Array.isArray(o.enemies) || o.enemies.length > 8) return null;
       g.enemies = o.enemies.map(function (q) { if (!TYPES[q.type]) throw 0; return { id: fin(q.id, 0, 1e6), kind: 'enemy', type: q.type, x: pos(q.x), y: pos(q.y), dir: DIR(q.dir), hp: fin(q.hp, 1, 4) | 0, maxHp: TYPES[q.type].hp, alive: true,
-        spawning: fin(q.spawning, 0, 2), spawnSafe: Math.max(fin(q.spawnSafe, -1e6, 1e6), 1), bonus: q.bonus === true, think: fin(q.think, -1e6, 1e6), cool: Math.max(fin(q.cool, -1e6, 1e6), 1), stuckT: 0, lx: q.x, ly: q.y, tread: 0, moving: false, hitT: 0 }; });
+        spawning: fin(q.spawning, 0, 2), spawnSafe: Math.max(fin(q.spawnSafe, -1e6, 1e6), 1), bonus: q.bonus === true, sprint: q.sprint === true, exitBoost: Math.max(0, fin(q.exitBoost == null ? 0 : q.exitBoost, -1, 5)),
+        think: fin(q.think, -1e6, 1e6), cool: Math.max(fin(q.cool, -1e6, 1e6), 1), stuckT: 0, lx: q.x, ly: q.y, tread: 0, moving: false, hitT: 0 }; });
       if (o.power) { if (POWERS.indexOf(o.power.kind) < 0) return null; g.power = { kind: o.power.kind, x: pos(o.power.x), y: pos(o.power.y), t: fin(o.power.t, 0, 30) }; }
       g.bullets = []; g.mapVer = nextVer(); return g;
     } catch (e) { return null; }
@@ -344,7 +384,7 @@
   function carry(g) { return g.players.map(function (p) { return { lives: Math.max(1, p.lives), tier: p.tier, score: p.score }; }); }
   function remaining(g) { return g.queue.length - g.spawned + g.enemies.filter(function (e) { return e.alive; }).length; }
 
-  var api = { N: N, H: H, EMPTY: EMPTY, BRICK: BRICK, STEEL: STEEL, WATER: WATER, TREES: TREES, ICE: ICE, BASE: BASE, TYPES: TYPES, DIFF: DIFF, ramped: ramped, POWERS: POWERS, DIRS: DIRS,
+  var api = { N: N, H: H, EMPTY: EMPTY, BRICK: BRICK, STEEL: STEEL, WATER: WATER, TREES: TREES, ICE: ICE, BASE: BASE, TYPES: TYPES, DIFF: DIFF, ramped: ramped, levelQuota: levelQuota, POWERS: POWERS, DIRS: DIRS,
     GATES: GATES, PSPAWN: PSPAWN, FORT: FORT, LEVELS: LV.LEVELS, newGame: newGame, step: step, snapshot: snapshot, restore: restore, carry: carry, remaining: remaining, free: free, move: move, turn: turn,
     applyPower: applyPower, killEnemy: killEnemy, fire: fire, buildMap: buildMap, rng: rng, spawnEnemy: spawnEnemy };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else { root.TK = root.TK || {}; root.TK.Engine = api; }

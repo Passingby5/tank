@@ -37,14 +37,24 @@ ok('every gate and player spawn can reach the bird in every level');
 { const g = blank(); for (const c of E.FORT) g.map[c[1]][c[0]] = 0; const e = enemy(g, 'b', 6, 8, 'd'); g.birdHp = 1; E.fire(g, e, 9, false, 1); run(g, 1); assert.strictEqual(g.status, 'lost'); assert.strictEqual(g.reason, 'bird'); assert.strictEqual(g.birdAlive, false); ok('a shot that hits the bird loses the level'); }
 { const hp = {}; for (const d of ['easy', 'medium', 'hard']) { const g = E.newGame({ level: 0, difficulty: d }); for (const c of E.FORT) g.map[c[1]][c[0]] = 0; for (let y = 9; y < 24; y++) for (let x = 11; x < 15; x++) g.map[y][x] = 0; g.spawnT = 999; g.shovelT = 0; let n = 0;
     while (g.status === 'play' && n < 9) { const e = enemy(g, 'b', 6, 9, 'd'); E.fire(g, e, 9, false, 1); g.enemies = []; run(g, 0.5); n++; } hp[d] = n; }
-  assert.deepStrictEqual(hp, { easy: 3, medium: 3, hard: 2 }); ok('the bird takes 3 hits on Easy and Medium, 2 on Hard'); }
-// 8. counts and spawning
-for (const [d, cnt, max] of [['easy', 15, 2], ['medium', 18, 3], ['hard', 18, 3]]) {
-  const g = E.newGame({ level: 3, difficulty: d, seed: 4 }); assert.strictEqual(g.queue.length, cnt); let peak = 0; const gates = new Set();
-  for (let i = 0; i < 60 * 60; i++) { g.players[0].shieldT = 5; E.step(g, idle, F); g.events.forEach(ev => { if (ev.t === 'spawn' && ev.y < 1) gates.add(ev.x); }); peak = Math.max(peak, g.enemies.filter(e => e.alive).length); if (i % 300 === 299) { const a = g.enemies.find(e => e.alive && !e.spawning); if (a) E.killEnemy(g, a, null); } if (g.status !== 'play') break; }
-  assert(peak <= max && peak >= Math.min(max, 2), d + ' peak ' + peak); assert.strictEqual(gates.size, 3, 'uses 3 gates');
+  assert.deepStrictEqual(hp, { easy: 3, medium: 3, hard: 3 }); ok('the bird takes 3 hits on Easy, Medium and Hard'); }
+// 8. counts, quotas and spawning
+for (const [L, q] of [[0, 20], [4, 20], [5, 25], [13, 25], [14, 30], [21, 30]]) {
+  for (const d of ['easy', 'medium', 'hard']) {
+    const g = E.newGame({ level: L, difficulty: d, seed: 4 });
+    assert.strictEqual(g.queue.length, q, d + ' L' + (L + 1) + ' quota');
+    assert.strictEqual(E.levelQuota(L), q);
+  }
 }
-ok('enemy count is 15 / 18 / 20 by difficulty, at most 2 / 3 / 4 alive, spawned from 3 gates');
+ok('enemy quotas are 20 on L1-5, 25 on L6-14, 30 on L15-22 for every difficulty');
+{ const g = E.newGame({ level: 3, difficulty: 'hard', seed: 4 }); let peak = 0; const gates = new Set();
+  for (let i = 0; i < 60 * 50; i++) { g.players[0].shieldT = 5; E.step(g, idle, F); g.events.forEach(ev => { if (ev.t === 'spawn' && ev.y < 1) gates.add(ev.x); });
+    peak = Math.max(peak, g.enemies.filter(e => e.alive).length); if (i % 180 === 179) { const a = g.enemies.find(e => e.alive && !e.spawning); if (a) E.killEnemy(g, a, null); } if (g.status !== 'play') break; }
+  assert(peak <= 3 && peak >= 2, 'hard mid peak ' + peak); assert.strictEqual(gates.size, 3, 'uses 3 gates');
+}
+{ const g = E.newGame({ level: 20, difficulty: 'hard', seed: 9 }); assert.strictEqual(g.D.max, 4); let peak = 0;
+  for (let i = 0; i < 60 * 40; i++) { g.players[0].shieldT = 5; E.step(g, idle, F); peak = Math.max(peak, g.enemies.filter(e => e.alive).length); if (i % 120 === 119) { const a = g.enemies.find(e => e.alive && !e.spawning); if (a) E.killEnemy(g, a, null); } }
+  assert(peak <= 4 && peak >= 3, 'late hard peak ' + peak); ok('spawns from 3 gates; mid Hard max 3 alive; last five levels allow 4'); }
 // 9. types
 { const T = E.TYPES; assert(T.f.speed > T.b.speed && T.r.fire < T.b.fire && T.a.hp === 4 && T.b.hp === 1);
   const g = blank(); const p = g.players[0]; p.x = 4; p.y = 10; const e = enemy(g, 'a', 4, 5); let shots = 0;
@@ -66,7 +76,10 @@ ok('enemy count is 15 / 18 / 20 by difficulty, at most 2 / 3 / 4 alive, spawned 
   ok('star (max 3), shield, shovel (steel then brick again), clock, bomb and tank all work'); }
 { const g = blank(), p = g.players[0]; p.x = 4; p.y = 8; g.power = { kind: 'tank', x: 4, y: 7, t: 10 }; const l = p.lives; run(g, 0.5, [{ dir: 'u' }]); assert.strictEqual(p.lives, l + 1); assert.strictEqual(g.power, null); ok('driving over a power-up picks it up'); }
 { const g = blank(); g.map[23][11] = g.map[22][11] = 0; const e = enemy(g, 'b', 5.5, 11); E.applyPower(g, g.players[0], 'shovel'); assert.strictEqual(g.map[23][11], 0, 'no wall under a tank'); assert.strictEqual(g.map[22][14], E.STEEL);
-  const h = E.newGame({ level: 0, difficulty: 'easy' }); assert(h.shovelT >= 89 && h.map[22][12] === E.STEEL); E.applyPower(h, h.players[0], 'shovel'); assert(h.shovelT >= 89, 'shovel does not shorten the Easy fort'); assert(E.newGame({ level: 0, difficulty: 'hard' }).shovelT >= 41); ok('fort pieces are never rebuilt under a tank; the fort starts as steel (Easy 90 s, Medium 45 s, Hard 42 s) and a shovel never shortens it'); }
+  for (const d of ['easy', 'medium', 'hard']) { const h = E.newGame({ level: 0, difficulty: d }); assert.strictEqual(h.shovelT, 0, d + ' shovelT'); assert.strictEqual(h.map[22][12], E.BRICK, d + ' fort brick'); }
+  const h = E.newGame({ level: 0, difficulty: 'hard' }); E.applyPower(h, h.players[0], 'shovel'); assert(h.shovelT >= 15.9 && h.shovelT <= 16.01); assert(E.FORT.every(c => h.map[c[1]][c[0]] === E.STEEL));
+  run(h, 16.1); assert.strictEqual(h.shovelT, 0); assert(E.FORT.every(c => h.map[c[1]][c[0]] === E.BRICK));
+  ok('fort starts as brick on every difficulty; shovel steels it for 16 s then restores brick; fort never rebuilds under a tank'); }
 // 12. win
 { const g = blank(); g.spawned = g.queue.length; const e = enemy(g, 'b', 4, 5); const p = g.players[0]; p.x = 4; p.y = 10; run(g, 0.05, [{ fire: true }]); run(g, 1); assert.strictEqual(g.status, 'won'); const c = E.carry(g); assert(c[0].score >= 100); const g2 = E.newGame({ level: 1, carry: c }); assert.strictEqual(g2.players[0].score, c[0].score); ok('clearing all enemies wins and carries lives, gun and score to the next level'); }
 // 16. determinism
@@ -82,7 +95,9 @@ ok('enemy count is 15 / 18 / 20 by difficulty, at most 2 / 3 / 4 alive, spawned 
 { const g = blank(), p = g.players[0]; p.x = 4; p.y = 8; p.dir = 'u'; g.map[14][9] = E.BRICK; run(g, 0.5, [{ dir: 'u' }]); assert.strictEqual(p.y, 7.5); assert.strictEqual(p.x, 4); ok('tanks stop flush against walls and never enter them'); }
 // 25. saves
 { const mem = () => { const m = {}; return { getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, m }; };
-  const st = mem(); let d = S.read(st, 22); assert.strictEqual(d.run, null);
+  const st = mem(); let d = S.read(st, 22); assert.strictEqual(d.run, null); assert.strictEqual(d.settings.difficulty, 'hard'); assert.strictEqual(S.VERSION, 3);
+  st.setItem(S.KEY, JSON.stringify({ v: 2, run: null, best: 10, settings: { muted: false, difficulty: 'easy' } }));
+  assert.strictEqual(S.read(st, 22).settings.difficulty, 'easy', 'preserves saved Easy from v2');
   d.run = { level: 4, difficulty: 'hard', twoP: true, attempt: 2, carry: [{ lives: 2, tier: 1, score: 900 }, { lives: 3, tier: 0, score: 100 }] }; d.settings.muted = true; S.write(st, d);
   d = S.read(st, 22); assert.strictEqual(d.run.level, 4); assert.strictEqual(d.run.carry[1].score, 100); assert.strictEqual(d.settings.muted, true);
   for (const bad of ['{', 'null', '[]', '"x"', JSON.stringify({ v: 0, run: d.run }), JSON.stringify({ v: 1, run: { level: 99, difficulty: 'hard', twoP: false, carry: [{ lives: 1, tier: 0, score: 0 }] } }), JSON.stringify({ v: 1, run: { level: 1, difficulty: 'x', twoP: false, carry: [] } }), JSON.stringify({ v: 1, run: { level: 1, difficulty: 'easy', twoP: false, carry: [{ lives: 'a' }] } })]) {
@@ -112,4 +127,47 @@ ok('enemy count is 15 / 18 / 20 by difficulty, at most 2 / 3 / 4 alive, spawned 
       for (const [t, p] of pre) if (t.alive && t.dir === p.dir) { const v = E.DIRS[p.dir]; if ((t.x - p.x) * v[0] + (t.y - p.y) * v[1] < -1e-6 && Math.abs(t.x - p.x) + Math.abs(t.y - p.y) < 0.5) back++; }
       for (const [a, b, o] of pairs) if (a.alive && b.alive && ov(a, b) > o + 1e-6) grow++; } }
   assert.strictEqual(back, 0, 'backward nudges: ' + back); assert.strictEqual(grow, 0, 'tank overlaps grew: ' + grow); ok('no backward nudge and no growing tank overlap over ' + steps + ' steps in 30 games'); }
+
+// v5: fire rate ramps up (interval multiplier falls) across levels; Hard never softens late
+{ const fires = [], softs = [];
+  for (let L = 0; L < E.LEVELS.length; L++) { const D = E.ramped(E.DIFF.hard, L); fires.push(D.fire); softs.push(D.soften); }
+  for (let i = 1; i < fires.length; i++) assert(fires[i] <= fires[i - 1] + 1e-9, 'hard fire not monotonic at L' + (i + 1));
+  assert(fires[fires.length - 1] < fires[0] - 0.4, 'hard late fire much faster');
+  assert(softs[softs.length - 1] <= softs[0] + 1e-9, 'hard soften must not rise late');
+  ok('Hard fire interval falls across the campaign and soften never rises late'); }
+// v5: anti-camp gate preference + visible spawn protection (no fire while protected, no spawn on player)
+{ const g = E.newGame({ level: 2, difficulty: 'hard', seed: 11 });
+  // clear gates and park the player on the middle gate
+  for (const [x, y] of E.GATES) for (let k = 0; k < 4; k++) g.map[y * 2 + (k >> 1)][x * 2 + (k & 1)] = 0;
+  const p = g.players[0]; p.x = 6; p.y = 0; p.alive = true; p.shieldT = 99;
+  g.spawnT = 0; g.enemies = []; g.spawned = 0;
+  const picks = [];
+  for (let n = 0; n < 18; n++) {
+    g.enemies = []; g.bullets = []; g.spawnT = 999; // freeze auto-spawn during the probe
+    // keep player camping the middle gate between preference checks
+    p.x = 6; p.y = 0; p.alive = true; p.shieldT = 99;
+    const before = g.spawned; assert(E.spawnEnemy(g), 'spawn ' + n); assert.strictEqual(g.spawned, before + 1);
+    const e = g.enemies[g.enemies.length - 1]; picks.push([e.x, e.y]);
+    assert(!(Math.abs(e.x - 6) < 0.1 && Math.abs(e.y - 0) < 0.1), 'spawned on player at ' + e.x + ',' + e.y);
+    assert(e.spawning > 1, 'visible spawn flash');
+    // cannot be damaged while spawning (visible flash)
+    const hp = e.hp; e.spawning = 0.8;
+    p.x = e.x; p.y = Math.min(12, e.y + 2); p.dir = 'u'; p.cool = 0; g.bullets = []; E.fire(g, p, 14, false, 1);
+    for (let i = 0; i < 30; i++) { e.spawning = 0.8; E.step(g, idle, F); }
+    assert(e.alive && e.hp === hp, 'no damage during visible spawn');
+    // spawnSafe: can be hit, but cannot fire at the player
+    e.spawning = 0; e.spawnSafe = 0.5; e.cool = 0; e.think = 99; g.bullets = [];
+    E.step(g, idle, F);
+    assert.strictEqual(g.bullets.filter(b => b.side === 'e').length, 0, 'no firing during spawnSafe');
+  }
+  const mid = picks.filter(([x, y]) => x === 6 && y === 0).length;
+  assert(mid <= 3, 'camped middle gate still preferred too often: ' + mid + '/18 ' + JSON.stringify(picks));
+  ok('anti-camp: avoids spawning on the player, prefers other gates when camping top, visible spawn blocks hits, spawnSafe blocks fire only'); }
+// v5: occasional sprint runners, capped and shootable
+{ let sprints = 0, n = 0; for (let s = 0; s < 40; s++) {
+    const g = E.newGame({ level: 8, difficulty: 'hard', seed: 100 + s });
+    while (g.spawned < g.queue.length) { E.spawnEnemy(g); const e = g.enemies[g.enemies.length - 1]; n++; if (e.sprint) { sprints++; assert(e.type !== 'a'); e.spawning = 0; e.spawnSafe = 0;
+      const T = E.TYPES[e.type]; const spd = Math.min(5, T.speed * g.D.speed * 1.4); assert(spd <= 5.01); } e.alive = false; g.enemies = []; }
+  }
+  assert(sprints / n > 0.08 && sprints / n < 0.25, 'sprint rate ' + (sprints / n)); ok('sprint runners appear sometimes (~15%), never on armored, speed capped at 5'); }
 console.log(n + ' unit tests passed');
