@@ -1,5 +1,5 @@
-// Service worker (v4 - Oct 31 - c8f7825). Page and version.json are NETWORK-FIRST so new versions show right away; cache is the offline fallback.
-const CACHE = 'tk-3678a459b5';
+// Service worker (v5 - Nov 6 - fd63e32). Page and version.json are NETWORK-FIRST so new versions show right away; cache is the offline fallback.
+const CACHE = 'tk-2f839df426';
 const ASSETS = ["./","index.html","manifest.webmanifest","icons/icon-192.png","icons/icon-512.png","icons/maskable-192.png","icons/maskable-512.png","icons/apple-touch-icon.png"];
 self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(ASSETS.map(u => new Request(u, { cache: 'reload' })))).then(() => self.skipWaiting())); });
 self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
