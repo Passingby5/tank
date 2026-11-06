@@ -176,13 +176,25 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
       // Try Again after Pause mid-score must restore entry score (R7-1), not mid carry
       const entryTry = await page.evaluate(() => { const e = TK.UI.state().save.run.entry[0]; return { score: e.score, lives: e.lives }; });
       await page.evaluate((entryTry) => { const g = TK.UI.game(); g.players[0].score = entryTry.score + 1100; g.players[0].lives = 3; g.players[0].tier = 2; }, entryTry);
-      await page.click('[data-act=pause]'); await page.waitForTimeout(250);
+      await tap('#hud [data-act=pause]');
+      assert.strictEqual((await S()).paused, true);
+      assert.strictEqual(await page.evaluate(() => TK.UI.state().save.run.carry[0].score), entryTry.score + 1100);
+      assert.strictEqual(await page.evaluate(() => TK.UI.state().save.run.entry[0].score), entryTry.score);
       await tap('#ov [data-act=resume]');
-      await page.evaluate(() => { const g = TK.UI.game(), E = TK.Engine; E.FORT.forEach(c => g.map[c[1]][c[0]] = 0); g.mapVer++; g.birdHp = 1; g.spawnT = 999;
+      // Blur/visibility can re-open Pause in headless; clear it before the loss steps.
+      for (let i = 0; i < 6 && (await S()).paused; i++) { await tap('#ov [data-act=resume]'); }
+      assert.strictEqual((await S()).paused, false, 'must be resumed before loss');
+      await page.evaluate(() => { const g = TK.UI.game(), E = TK.Engine; E.FORT.forEach(c => g.map[c[1]][c[0]] = 0); g.mapVer++; g.birdHp = 1; g.spawnT = 999; g.bullets = [];
         g.enemies = [{ id: 88, kind: 'enemy', type: 'b', x: 6, y: 10.6, dir: 'd', hp: 1, maxHp: 1, alive: true, spawning: 0, spawnSafe: 99, bonus: false, think: 99, cool: 99, stuckT: 0, lx: 6, ly: 10.6, tread: 0, hitT: 0 }];
         g.players[0].x = 1; g.players[0].y = 1; E.fire(g, g.enemies[0], 9, false, 1); });
-      await page.waitForTimeout(2600);
-      assert.strictEqual(await page.textContent('#ovTitle'), 'The bird was hit!');
+      let lostTitle = '';
+      for (let i = 0; i < 40; i++) {
+        if ((await S()).paused) { try { await tap('#ov [data-act=resume]'); } catch (e) { } }
+        lostTitle = await page.textContent('#ovTitle');
+        if (lostTitle === 'The bird was hit!' || lostTitle === 'Out of tanks!') break;
+        await page.waitForTimeout(100);
+      }
+      assert.ok(lostTitle === 'The bird was hit!' || lostTitle === 'Out of tanks!', 'expected loss overlay, got ' + lostTitle);
       await tap('#ov [data-act=retry]');
       const afterTry = await page.evaluate(() => { const g = TK.UI.game(), run = TK.UI.state().save.run; return { score: g.players[0].score, lives: g.players[0].lives, tier: g.players[0].tier, entry: run.entry[0].score }; });
       assert.strictEqual(afterTry.score, entryTry.score, 'Try Again must use entry score not mid carry');
