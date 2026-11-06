@@ -13,7 +13,7 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 - Three enemies per level flash red (ranges scale with the quota). Hitting one drops a power-up: star, shield, shovel (steel fort ~16 s), bomb, clock, tank.
 - Occasional non-armored sprint runners move unusually fast but stay lead-shotable (speed capped).
 - The bird sits behind a two layer brick fort that starts as brick. Shovel turns it to steel for about 16 seconds, then brick again. The bird takes 3 enemy hits on Easy, Medium and Hard.
-- Easy, Medium and Hard change speed, aim, fire rate, bullet speed, lives (6 / 6 / 5) and bird hits. Hard is the default on a brand-new install; existing saved difficulty choices are preserved. Fire rate speeds up across the campaign on every mode; Hard does not soften late. Last five levels are the toughest.
+- Easy, Medium and Hard change speed, aim, fire rate, bullet speed, lives (6 / 6 / 6) and bird hits. Hard is the default on a brand-new install; existing saved difficulty choices are preserved. Fire rate speeds up across the campaign on every mode; Hard does not soften late. Last five levels are the toughest.
 - 2 players on one device: keyboard W A S D + Space and Arrows + Enter, or a split touch pad in landscape.
 
 ## Tech
@@ -67,7 +67,7 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 
 ## v4 additions (QA v3 report)
 - BLOCKER fixed: the board always shows the current level. Map versions come from one global counter, the renderer's terrain and tree caches are keyed to the map object as well as its version, and they are cleared on every new game, level, Continue, restore and Home. tests/chain.js plays Next, Home, Play, Continue and reload + restore in ONE page and compares the board pixels with a fresh render of each level.
-- Hard ramps: the pro model wins at least 20% of every Hard level (per-level gate in npm test), and Hard stays clearly harder than Medium for both player models.
+- Hard is the advanced baseline. Sims check early skilled clears, camp-vs-mobile anti-camp, and that the final band is not easier than the opening band. Late levels remain intentionally severe for simple bots.
 
 
 ## v5 additions (Tom Nov 6)
@@ -77,3 +77,8 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 - Occasional distinct sprint runners (speed capped at 5).
 - Quotas 20 (L1-5) / 25 (L6-14) / 30 (L15-22). Hard default for new installs; old saves keep their difficulty.
 - Fairness sims use skilled mobile vs top-camp strategies instead of kid-win ease gates.
+
+
+## v6 additions (QA v5 M1)
+- Mid-level snapshot restore rejects non-integer or out-of-range spawned/killed/gate/birdHp and impossible cross-field values. Continue falls back to a clean level start when restore returns null.
+- Equal-danger spawn gate ties keep the shuffled order (no fixed left-gate bias).

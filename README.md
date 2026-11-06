@@ -15,4 +15,4 @@ A small top-down tank game for phones and computers. Guard the bird, clear 22 le
 - To skip it on purpose (for example on a machine without the file), run `SKIP_ORIGINALITY=1 npm test`. The output then says the check was skipped.
 
 ## Difficulty
-Easy is the default on first run. Medium starts gentle on Level 1 and gets stronger level by level. `npm test` checks that a slow, sloppy player model wins at least 30% of every Medium level and at least 50% of every Easy level, and that a strong player model wins at least 20% of every Hard level while Hard stays clearly harder than Medium.
+Hard is the default on a brand-new install; an existing saved Easy/Medium choice is kept. The bird fort starts as brick; shovel steels it for about 16 seconds. Enemy quotas are 20 / 25 / 30 by level band. `npm test` checks fort/spawn/anti-camp rules, and advanced fair-play sims (camp vs mobile), not the old kid-win ease gates.

@@ -50,11 +50,11 @@ const ALL = E.LEVELS.map((_, i) => i);
 const EARLY = [0, 1, 2, 3, 4], MID = [7, 8, 9, 10, 11], LATE = [17, 18, 19, 20, 21];
 const pc = r => (r.win * 100).toFixed(0) + '% win / bird ' + (r.bird * 100).toFixed(0) + '% (n=' + r.n + ')';
 
-const proEarly = rate(EARLY, 'hard', 'pro', 12);
+const proEarly = rate(EARLY, 'hard', 'pro', 16);
 const proMid = rate(MID, 'hard', 'pro', 10);
 const proLate = rate(LATE, 'hard', 'pro', 12);
 const campMid = rate(MID, 'hard', 'camp', 10);
-const medEarly = rate(EARLY, 'medium', 'pro', 12);
+const medEarly = rate(EARLY, 'medium', 'pro', 16);
 const hardEarly = proEarly;
 console.log('info: Hard pro early ' + pc(proEarly));
 console.log('info: Hard pro mid ' + pc(proMid));

@@ -170,4 +170,38 @@ ok('enemy quotas are 20 on L1-5, 25 on L6-14, 30 on L15-22 for every difficulty'
       const T = E.TYPES[e.type]; const spd = Math.min(5, T.speed * g.D.speed * 1.4); assert(spd <= 5.01); } e.alive = false; g.enemies = []; }
   }
   assert(sprints / n > 0.08 && sprints / n < 0.25, 'sprint rate ' + (sprints / n)); ok('sprint runners appear sometimes (~15%), never on armored, speed capped at 5'); }
+
+// v6 M1: corrupt numeric snapshots are rejected; Continue path stays safe
+{ const base = () => { const g = E.newGame({ level: 0, difficulty: 'hard', seed: 3 }); for (let i = 0; i < 60 * 5; i++) E.step(g, idle, F); return JSON.parse(JSON.stringify(E.snapshot(g))); };
+  for (const bad of [{ spawned: -1 }, { spawned: 0.5 }, { spawned: 99 }, { killed: -1 }, { killed: 0.5 }, { birdHp: 9999 }, { birdHp: 0 }, { shovelT: -3 }, { gate: 3 }, { gate: 1.5 }, { nextId: 0 }, { nextId: 1.5 }]) {
+    const snap = Object.assign(base(), bad);
+    assert.strictEqual(E.restore(snap), null, 'should reject ' + JSON.stringify(bad));
+  }
+  const okSnap = base(); const r = E.restore(okSnap); assert(r); for (let i = 0; i < 120; i++) E.step(r, idle, F);
+  // Save.read keeps the blob, but restore null means UI falls back to a clean level
+  const raw = JSON.stringify({ v: 3, settings: { difficulty: 'hard', muted: false }, run: { level: 0, difficulty: 'hard', twoP: false, attempt: 0, carry: [{ lives: 6, tier: 0, score: 0 }], snap: Object.assign(base(), { spawned: -1, spawnT: 0 }) } });
+  const mem = { getItem: () => raw, setItem() {} }; const data = S.read(mem, 22);
+  assert(data.run && data.run.snap); assert.strictEqual(E.restore(data.run.snap), null);
+  ok('corrupt spawned/killed/birdHp/shovel/gate snapshots are rejected; Save.read still loads the run for clean-level fallback'); }
+// Restart Level: keep lives/score/gun carry, restore bird to full, change seed (no same-layout farm)
+{ const g = E.newGame({ level: 4, difficulty: 'hard', seed: 11 }); g.players[0].lives = 4; g.players[0].tier = 2; g.players[0].score = 900; g.birdHp = 1;
+  const carry = E.carry(g); assert.strictEqual(carry[0].lives, 4); assert.strictEqual(carry[0].tier, 2); assert.strictEqual(carry[0].score, 900);
+  const attempt = 2, seedA = (4 + 1) * 7919 + attempt * 104729, seedB = (4 + 1) * 7919 + (attempt + 1) * 104729;
+  const a = E.newGame({ level: 4, difficulty: 'hard', carry, seed: seedA }); const b = E.newGame({ level: 4, difficulty: 'hard', carry, seed: seedB });
+  assert.strictEqual(a.birdHp, a.birdMax); assert.strictEqual(a.birdMax, 3); assert.strictEqual(a.players[0].lives, 4); assert.strictEqual(a.players[0].score, 900); assert.strictEqual(a.players[0].tier, 2);
+  assert.notStrictEqual(a.queue.join(''), b.queue.join(''), 'restart attempt changes the enemy order/seed');
+  ok('Restart Level keeps lives/score/gun, restores bird to 3, and changes the seed so the same layout is not farmed'); }
+// Gate ties keep shuffle variety (QA G1)
+{ const counts = [0, 0, 0];
+  for (let s = 0; s < 200; s++) {
+    const g = E.newGame({ level: 1, difficulty: 'hard', seed: 50 + s }); g.enemies = []; g.spawned = 0; g.spawnT = 999;
+    g.players[0].x = 6; g.players[0].y = 1.6; g.players[0].alive = true;
+    for (let n = 0; n < 12 && g.spawned < g.queue.length; n++) {
+      g.enemies = []; E.spawnEnemy(g); const e = g.enemies[0]; if (!e) break;
+      if (e.x === 0) counts[0]++; else if (e.x === 6) counts[1]++; else if (e.x === 12) counts[2]++;
+    }
+  }
+  assert(counts[0] > 400 && counts[2] > 400, 'side gates underused ' + counts); assert(counts[1] < counts[0] && counts[1] < counts[2], 'middle should be avoided when camping ' + counts);
+  const ratio = counts[0] / Math.max(1, counts[2]); assert(ratio > 0.55 && ratio < 1.8, 'side gates should be roughly balanced when equally safe ' + counts);
+  ok('anti-camp avoids the camped middle gate and keeps left/right variety on equal-danger ties'); }
 console.log(n + ' unit tests passed');

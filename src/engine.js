@@ -21,8 +21,8 @@
   var DIFF = {
     easy: { lives: 6, speed: 0.82, fire: 2.55, bullet: 0.8, max: 3, chase: 0.06, spawn: 1.45, aim: 0.03, aimBird: false, fortStart: 0, bird: 3, soften: 0.58,
       last: { speed: 0.9, fire: 1.95, bullet: 0.85, chase: 0.09, aim: 0.07, soften: 0.42 } },
-    medium: { lives: 6, speed: 0.88, fire: 2.25, bullet: 0.84, max: 3, chase: 0.1, spawn: 1.25, aim: 0.1, aimBird: false, fortStart: 0, bird: 3, soften: 0.4,
-      last: { speed: 0.95, fire: 1.55, bullet: 0.9, max: 3, chase: 0.14, aim: 0.18, soften: 0.25 } },
+    medium: { lives: 6, speed: 0.86, fire: 2.45, bullet: 0.82, max: 3, chase: 0.08, spawn: 1.35, aim: 0.06, aimBird: false, fortStart: 0, bird: 3, soften: 0.5,
+      last: { speed: 0.94, fire: 1.6, bullet: 0.9, max: 3, chase: 0.13, aim: 0.16, soften: 0.28 } },
     hard: { lives: 6, speed: 0.94, fire: 1.95, bullet: 0.9, max: 3, chase: 0.12, spawn: 1.2, aim: 0.18, aimBird: false, fortStart: 0, bird: 3, soften: 0.28,
       last: { speed: 1.0, fire: 1.35, bullet: 0.95, max: 4, chase: 0.18, aim: 0.28, soften: 0.14, spawn: 1.0 } }
   };
@@ -210,7 +210,8 @@
   }
 
   function spawnEnemy(g) {
-    if (g.spawned >= g.queue.length) return false;
+    if (typeof g.spawned !== 'number' || !isFinite(g.spawned) || g.spawned !== (g.spawned | 0) || g.spawned < 0 || g.spawned >= g.queue.length) return false;
+    if (!TYPES[g.queue[g.spawned]]) return false;
     // Shuffle gates, then prefer free gates farther from a player camping near the top (anti-camp, still fair).
     var order = [0, 1, 2], i, j, tmp;
     for (i = 2; i > 0; i--) { j = Math.floor(rng(g) * (i + 1)); tmp = order[i]; order[i] = order[j]; order[j] = tmp; }
@@ -228,7 +229,7 @@
       scored.push({ gi: gi, x: x, y: y, danger: danger });
     }
     if (!scored.length) return false;
-    scored.sort(function (a, b) { return a.danger - b.danger || a.gi - b.gi; });
+    scored.sort(function (a, b) { var d = a.danger - b.danger; return Math.abs(d) > 1e-9 ? d : 0; }); // equal danger keeps shuffle order (QA G1)
     var pick = scored[0];
     if (scored.length > 1 && rng(g) < 0.3) pick = scored[1 + Math.floor(rng(g) * (scored.length - 1))];
     var type = g.queue[g.spawned], T = TYPES[type];
@@ -355,20 +356,33 @@
       power: g.power ? { kind: g.power.kind, x: g.power.x, y: g.power.y, t: g.power.t } : null,
       players: g.players.map(function (p) { return { x: p.x, y: p.y, dir: p.dir, lives: p.lives, tier: p.tier, score: p.score, alive: p.alive, out: p.out, shieldT: p.shieldT, respawnT: p.respawnT, kills: p.kills }; }),
       enemies: g.enemies.filter(function (e) { return e.alive; }).map(function (e) { return { id: e.id, type: e.type, x: e.x, y: e.y, dir: e.dir, hp: e.hp, spawning: e.spawning, spawnSafe: e.spawnSafe || 0, bonus: e.bonus, sprint: !!e.sprint, exitBoost: Math.max(0, e.exitBoost || 0), think: e.think, cool: e.cool }; }) };
-    NUMS.forEach(function (k) { o[k] = g[k]; }); return o;
+    NUMS.forEach(function (k) { o[k] = g[k]; }); if (o.spawnT < 0) o.spawnT = 0; if (o.shovelT < 0) o.shovelT = 0; if (o.freezeT < 0) o.freezeT = 0; return o;
   }
   function restore(o) {
     try {
       var fin = function (v, lo, hi) { if (typeof v !== 'number' || !isFinite(v) || v < lo || v > hi) throw 0; return v; };
+      var jint = function (v, lo, hi) { var n = fin(v, lo, hi); if (Math.floor(n) !== n) throw 0; return n; };
       var pos = function (v) { return Math.max(0, Math.min(12, fin(v, -0.5, 12.5))); };
       var DIR = function (d) { if (!DIRS[d]) throw 0; return d; };
       if (!o || o.v !== 1 || !DIFF[o.diff] || typeof o.twoP !== 'boolean') return null;
-      var g = newGame({ level: fin(o.level, 0, LV.LEVELS.length - 1), difficulty: o.diff, twoP: o.twoP, seed: 1 });
+      var g = newGame({ level: jint(o.level, 0, LV.LEVELS.length - 1), difficulty: o.diff, twoP: o.twoP, seed: 1 });
       if (!Array.isArray(o.map) || o.map.length !== H) return null;
       g.map = o.map.map(function (r) { if (typeof r !== 'string' || !/^[0-6]{26}$/.test(r)) throw 0; return r.split('').map(Number); });
       if (typeof o.queue !== 'string' || !/^[bfra]{1,40}$/.test(o.queue)) return null; g.queue = o.queue.split('');
-      if (!Array.isArray(o.bonusAt) || o.bonusAt.length > 5) return null; g.bonusAt = o.bonusAt.map(function (v) { return fin(v, 0, 40); });
-      NUMS.forEach(function (k) { g[k] = fin(o[k], -5e9, 5e9); }); g.seed = g.seed | 0; g.spawned = Math.min(g.spawned, g.queue.length);
+      if (!Array.isArray(o.bonusAt) || o.bonusAt.length > 5) return null; g.bonusAt = o.bonusAt.map(function (v) { return jint(v, 0, 40); });
+      // Per-field ranges (QA M1): spawned must be a nonnegative integer index into the queue.
+      g.t = fin(o.t, 0, 1e7);
+      g.freezeT = fin(o.freezeT, 0, 1e6);
+      g.shovelT = fin(o.shovelT, 0, 120);
+      g.spawnT = fin(o.spawnT, -5, 1e6);
+      g.gate = jint(o.gate, 0, 2);
+      g.spawned = jint(o.spawned, 0, g.queue.length);
+      g.killed = jint(o.killed, 0, g.queue.length);
+      g.nextId = jint(o.nextId, 1, 1e6);
+      g.birdHp = jint(o.birdHp, 1, 9);
+      g.seed = jint(o.seed, -2147483648, 2147483647);
+      if (g.killed > g.spawned) throw 0;
+      if (g.birdHp > Math.max(g.birdMax || 0, 9)) throw 0;
       g.birdAlive = o.birdAlive === true; if (!g.birdAlive || g.birdHp < 1) return null;
       if (!Array.isArray(o.players) || o.players.length !== g.players.length) return null;
       o.players.forEach(function (q, i) { var p = g.players[i]; p.x = pos(q.x); p.y = pos(q.y); p.dir = DIR(q.dir); p.lives = fin(q.lives, 0, 9) | 0; p.tier = fin(q.tier, 0, 3) | 0; p.score = fin(q.score, 0, 1e8) | 0;

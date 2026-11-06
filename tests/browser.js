@@ -40,13 +40,24 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
       assert(!r.over, vp.name + ' page scrolls at ' + where); assert.deepStrictEqual(r.small, [], vp.name + ' small targets at ' + where); assert.deepStrictEqual(r.clash, [], vp.name + ' overlaps at ' + where); assert.deepStrictEqual(r.offscreen, [], vp.name + ' off screen at ' + where); assert.deepStrictEqual(r.tight, [], vp.name + ' FIRE closer than 16 px to the D-pad at ' + where); if (r.gap !== Infinity) gaps.push(where + ' ' + r.gap.toFixed(0));
     };
     await page.goto(base, { waitUntil: 'load' }); await page.waitForTimeout(400);
-    const label = await page.textContent('#ver'); assert(/^v5 - Nov 6 - \w{7}$/.test(label), 'label ' + label);
+    const label = await page.textContent('#ver'); assert(/^v6 - Nov 6 - \w{7}$/.test(label), 'label ' + label);
     if (!single && full) { const v = await (await page.request.get(base + 'version.json?t=' + Date.now())).json(); assert.strictEqual(label, v.label);
       const sw = await page.evaluate(async () => { const r = await navigator.serviceWorker.ready; return !!r.active; }); assert(sw); ok(vp.name + ' version label "' + label + '" matches version.json; service worker active'); }
     else ok(vp.name + ' version label "' + label + '"');
     await layout('home'); assert.strictEqual(await page.isVisible('#btnContinue'), false);
     if (full) { const diff = await page.evaluate(() => TK.UI.state().save.settings.difficulty); assert.strictEqual(diff, 'hard'); assert(await page.locator('[data-act=diff][data-v=hard].on').count() === 1); }
     if (vp.name === 'portrait') await shot('1-home.jpg'); ok(vp.name + ' home: no overlaps, no scrolling, targets >= 44 px, no Continue on first visit, Hard selected by default');
+    // Phone home: logo art, Best score row and version must stay fully on-screen (QA reserved mobile crop).
+    { const homeVis = await page.evaluate(() => {
+        const box = id => { const e = document.getElementById(id); if (!e) return null; const b = e.getBoundingClientRect(); return { t: b.top, b: b.bottom, l: b.left, r: b.right, h: b.height, txt: (e.textContent || '').trim() }; };
+        return { logo: box('logoArt'), best: box('best'), ver: box('ver'), wh: [innerWidth, innerHeight] };
+      });
+      for (const k of ['logo', 'best', 'ver']) {
+        const b = homeVis[k]; assert(b, vp.name + ' missing ' + k);
+        assert(b.t >= -1 && b.b <= homeVis.wh[1] + 1 && b.l >= -1 && b.r <= homeVis.wh[0] + 1, vp.name + ' home ' + k + ' cropped ' + JSON.stringify(b) + ' in ' + homeVis.wh);
+      }
+      ok(vp.name + ' home logo, Best score row and version fully on screen at ' + homeVis.wh.join('x'));
+    }
     if (full) {
       await tap('#home .muteBtn'); assert.strictEqual((await S()).muted, true); assert(/Off/.test(await page.textContent('#home .muteBtn'))); await page.reload(); await page.waitForTimeout(300); assert.strictEqual((await S()).muted, true); await tap('#home .muteBtn'); assert.strictEqual((await S()).muted, false); ok(vp.name + ' mute toggle saved across reload');
       await tap('[data-act=help]'); assert.strictEqual(await page.locator('#powerList canvas').count(), 6); assert.strictEqual(await page.locator('#foeList canvas').count(), 4); await layout('help'); await tap('#help [data-act=home]'); ok(vp.name + ' How to Play shows 6 power-ups and 4 enemy types');
@@ -100,12 +111,12 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
         await page.waitForTimeout(350); await shot('3-power-up.jpg'); assert.strictEqual(await page.evaluate(() => TK.UI.game().map[22][12]), 2); }
     }
     // pause saves the exact spot; reload + Continue resumes it
-    const before = await page.evaluate(() => { const g = TK.UI.game(); g.bullets = []; g.freezeT = 60; g.players[0].cool = 99; g.players[0].score = 2500; g.players[0].tier = 2; g.killed = 7; return { score: 2500, killed: 7, spawned: g.spawned, x: g.players[0].x }; });
+    const before = await page.evaluate(() => { const g = TK.UI.game(); g.bullets = []; g.freezeT = 60; g.players[0].cool = 99; g.players[0].score = 2500; g.players[0].tier = 2; g.killed = 3; g.spawned = Math.max(g.spawned, 4); return { score: 2500, killed: 3, spawned: g.spawned, x: g.players[0].x }; });
     await tap('#hud [data-act=pause]'); s = await S(); assert.strictEqual(s.paused, true); assert.strictEqual(await page.textContent('#ovTitle'), 'Paused'); assert(/Saved right here/.test(await page.textContent('#ovText'))); await layout('pause');
     await tap('#ov [data-act=home]'); assert(await page.isVisible('#btnContinue')); await page.reload(); await page.waitForTimeout(300); assert(await page.isVisible('#btnContinue'));
     await tap('#btnContinue'); s = await S(); assert.strictEqual(s.screen, 'play'); assert.strictEqual(s.level, 0);
     const after = await page.evaluate(() => { const g = TK.UI.game(); return { score: g.players[0].score, killed: g.killed, spawned: g.spawned, tier: g.players[0].tier }; });
-    assert.strictEqual(after.score, 2500); assert.strictEqual(after.killed, 7); assert.strictEqual(after.spawned, before.spawned); assert.strictEqual(after.tier, 2);
+    assert.strictEqual(after.score, 2500); assert.strictEqual(after.killed, 3); assert.strictEqual(after.spawned, before.spawned); assert.strictEqual(after.tier, 2);
     ok(vp.name + ' pause saves mid-level; Continue after reload resumes the same spot (score, kills, gun, enemies left)');
     if (full) { await page.evaluate(() => history.back()); await page.waitForTimeout(500); s = await S(); assert.strictEqual(s.paused, true); assert(page.url().startsWith(base.split('#')[0].slice(0, 10)));
       await tap('#ov [data-act=resume]'); s = await S(); assert.strictEqual(s.paused, false);
@@ -118,6 +129,59 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     // bird hit -> game over, Try Again
     await page.evaluate(() => { const g = TK.UI.game(), E = TK.Engine; E.FORT.forEach(c => g.map[c[1]][c[0]] = 0); g.mapVer++; g.spawnT = 999; const T = E.TYPES.b; g.birdHp = 1; g.enemies = [{ id: 77, kind: 'enemy', type: 'b', x: 6, y: 10.6, dir: 'd', hp: 1, maxHp: 1, alive: true, spawning: 0, spawnSafe: 99, bonus: false, think: 99, cool: 99, stuckT: 0, lx: 6, ly: 10.6, tread: 0, hitT: 0 }]; g.players[0].x = 1; g.players[0].y = 1; E.fire(g, g.enemies[0], 9, false, 1); });
     await page.waitForTimeout(2600); assert.strictEqual(await page.textContent('#ovTitle'), 'The bird was hit!'); await layout('game over'); await tap('#ov [data-act=retry]'); s = await S(); assert.strictEqual(s.level, 1); assert.strictEqual(s.status, 'play'); ok(vp.name + ' bird hit ends the level; Try Again restarts it');
+    if (full) {
+      // Real Playwright touchscreen + CDP touch hold against the pointer-based D-pad
+      await page.evaluate(() => { const g = TK.UI.game(); g.spawnT = 999; g.enemies = []; const p = g.players[0]; p.x = 4; p.y = 8; p.dir = 'u'; p.shieldT = 99; for (let y = 10; y < 20; y++) for (let x = 0; x < 26; x++) g.map[y][x] = 0; g.mapVer++; });
+      const armBox = await page.locator('#dpad0 .arm[data-d=r]').boundingBox();
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: armBox.x + armBox.width / 2, y: armBox.y + armBox.height / 2, id: 9 }] });
+      await page.waitForTimeout(450);
+      await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+      s = await S(); assert(s.player.x > 4.5, 'touchscreen drive ' + s.player.x);
+      const fireBox0 = await page.locator('#fire0').boundingBox();
+      await page.touchscreen.tap(fireBox0.x + fireBox0.width / 2, fireBox0.y + fireBox0.height / 2);
+      await page.waitForTimeout(200);
+      ok(vp.name + ' Playwright touchscreen/CDP touch drives D-pad and taps FIRE');
+      // GUI shovel: pickup steels fort 16s then brick
+      await page.evaluate(() => {
+        const g = TK.UI.game(), E = TK.Engine, p = g.players[0];
+        g.spawnT = 999; g.enemies = []; g.bullets = []; g.shovelT = 0;
+        for (const c of E.FORT) g.map[c[1]][c[0]] = E.BRICK; g.mapVer++;
+        p.x = 4; p.y = 8; p.dir = 'u';
+        for (let y = 14; y < 18; y++) for (let x = 8; x < 10; x++) g.map[y][x] = 0;
+        g.power = { kind: 'shovel', x: 4, y: 7, t: 20 }; g.mapVer++;
+      });
+      // drive onto the shovel with CDP touch hold on Up
+      { const up = await page.locator('#dpad0 .arm[data-d=u]').boundingBox();
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x: up.x + up.width / 2, y: up.y + up.height / 2, id: 11 }] });
+        await page.waitForTimeout(700);
+        await cdp.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] }); }
+      let sh = await page.evaluate(() => { const g = TK.UI.game(), E = TK.Engine; return { t: g.shovelT, steel: E.FORT.every(c => g.map[c[1]][c[0]] === E.STEEL) }; });
+      assert(sh.steel && sh.t > 14 && sh.t <= 16.05, 'shovel pickup ' + JSON.stringify(sh));
+      await page.evaluate(() => { const g = TK.UI.game(); g.shovelT = 0.05; });
+      await page.waitForTimeout(250);
+      sh = await page.evaluate(() => { const g = TK.UI.game(), E = TK.Engine; return { t: g.shovelT, brick: E.FORT.every(c => g.map[c[1]][c[0]] === E.BRICK) }; });
+      assert(sh.t === 0 && sh.brick, 'shovel expiry ' + JSON.stringify(sh)); ok(vp.name + ' shovel pickup steels the fort then restores brick after ~16s');
+      // Restart Level keeps score/lives, restores bird, new attempt seed
+      await page.evaluate(() => { const g = TK.UI.game(); g.players[0].score = 777; g.players[0].lives = 4; g.players[0].tier = 2; g.birdHp = 1; });
+      await page.click('[data-act=pause]'); await page.waitForTimeout(300);
+      await tap('#ov [data-act=restart]');
+      s = await S();
+      const rs = await page.evaluate(() => { const g = TK.UI.game(); return { score: g.players[0].score, lives: g.players[0].lives, tier: g.players[0].tier, bird: g.birdHp, birdMax: g.birdMax, attempt: TK.UI.state().save.run.attempt }; });
+      assert.strictEqual(rs.score, 777); assert.strictEqual(rs.lives, 4); assert.strictEqual(rs.tier, 2); assert.strictEqual(rs.bird, rs.birdMax); assert.strictEqual(rs.bird, 3); assert(rs.attempt >= 1);
+      ok(vp.name + ' Restart Level keeps lives/score/gun, restores bird to 3, bumps attempt');
+      // Late / final level smoke: start L21 and L22, step briefly with touch fire, no throw
+      for (const L of [20, 21]) {
+        await page.evaluate(L => { TK.UI.start(L, null, false, 'hard', 0); }, L);
+        await page.waitForTimeout(200);
+        const fireBox = await page.locator('#fire0').boundingBox();
+        await page.touchscreen.tap(fireBox.x + fireBox.width / 2, fireBox.y + fireBox.height / 2);
+        await page.waitForTimeout(500);
+        const st = await page.evaluate(() => { const g = TK.UI.game(); return { level: g.level, status: g.status, q: g.queue.length, max: g.D.max, fort: g.map[22][12] }; });
+        assert.strictEqual(st.level, L); assert.strictEqual(st.status, 'play'); assert.strictEqual(st.q, 30); assert(st.max >= 4); assert.strictEqual(st.fort, 1);
+      }
+      ok(vp.name + ' final-band levels L21-L22 start with quota 30, brick fort, max>=4 and accept touch FIRE');
+    }
     if (vp.name === 'landscape' || vp.name === 'land568') { // 2 players with a split touch pad
       await tap('#hud [data-act=pause]'); await tap('#ov [data-act=home]'); await tap('#btnTwo'); s = await S(); assert.strictEqual(s.twoP, true); assert(await page.isVisible('#dpad1') && await page.isVisible('#fire1')); await layout('2 players'); ok(vp.name + ' 2 players: both FIRE buttons sit at least 16 px from every D-pad arm (' + gaps.pop() + ' px)');
       await page.evaluate(() => { const g = TK.UI.game(); g.spawnT = 999; g.players[1].x = 10; g.players[1].y = 8; for (let y = 14; y < 20; y++) for (let x = 0; x < 26; x++) g.map[y][x] = 0; g.mapVer++; });
@@ -162,7 +226,7 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     await page.evaluate(() => { TK.UI.game().players.forEach(q => q.cool = 0); }); await page.keyboard.press('Space'); await page.keyboard.press('Enter'); await page.waitForTimeout(30); const nb = await page.evaluate(() => TK.UI.game().bullets.filter(b => b.side === 'p').map(b => b.owner.id).sort().join()); assert.strictEqual(nb, '0,1');
     await page.keyboard.press('KeyP'); assert.strictEqual((await page.evaluate(() => TK.UI.state())).paused, true); await page.keyboard.press('Escape'); assert.strictEqual((await page.evaluate(() => TK.UI.state())).paused, false);
     ok('desktop keyboard: W A S D + Space for player 1, arrows + Enter for player 2, P and Escape pause and resume');
-    if (!single) { await ctx.setOffline(true); await page.reload(); await page.waitForTimeout(500); assert(/^v5/.test(await page.textContent('#ver'))); await page.click('#btnPlay'); await page.waitForTimeout(400); assert.strictEqual((await page.evaluate(() => TK.UI.state())).screen, 'play'); await ctx.setOffline(false); ok('offline: page reloads from the service worker cache and plays');
+    if (!single) { await ctx.setOffline(true); await page.reload(); await page.waitForTimeout(500); assert(/^v6/.test(await page.textContent('#ver'))); await page.click('#btnPlay'); await page.waitForTimeout(400); assert.strictEqual((await page.evaluate(() => TK.UI.state())).screen, 'play'); await ctx.setOffline(false); ok('offline: page reloads from the service worker cache and plays');
       const man = await (await page.request.get(base + 'manifest.webmanifest')).json(); assert(man.icons.length >= 4 && man.display === 'standalone'); const sw = await (await page.request.get(base + 'sw.js')).text(); assert(/NETWORK-FIRST/.test(sw) && /skipWaiting/.test(sw)); ok('manifest with icons; network-first, self-updating service worker'); }
     assert.deepStrictEqual(errors.filter(e => !/ERR_INTERNET_DISCONNECTED|Failed to load resource/.test(e)), []); ok('desktop 0 console errors'); await ctx.close(); }
   await browser.close(); if (server) server.close();
