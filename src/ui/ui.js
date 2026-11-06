@@ -121,18 +121,25 @@
       case 'home': st.g = null; R.invalidate(); st.paused = false; show('home'); break;
       case 'pause': pause(); break;
       case 'resume': resume(); break;
-      case 'restart': var r = data.run; if (r) { var entry = r.entry || r.carry; startLevel(r.level, entry.map(function (c) { return { lives: c.lives, tier: c.tier, score: c.score }; }), r.twoP, r.difficulty, r.attempt + 1); } break;
+      case 'restart': var r = data.run; if (r) startLevel(r.level, entryClone(r), r.twoP, r.difficulty, r.attempt + 1); break;
       case 'next': if (data.run) startLevel(data.run.level, data.run.carry, data.run.twoP, data.run.difficulty, 0); break;
-      case 'retry': var q = data.run; if (q) startLevel(q.level, q.carry.map(function (c) { return { lives: E.DIFF[q.difficulty].lives, tier: 0, score: c.score }; }), q.twoP, q.difficulty, q.attempt + 1); break;
+      case 'retry': var q = data.run; if (q) startLevel(q.level, retryClone(q), q.twoP, q.difficulty, q.attempt + 1); break;
     }
+  }
+  // Immutable level-entry checkpoint: score/lives/gun at the moment this level began.
+  // Restart restores entry as-is. Try Again / post-loss Continue without snap use entry score with full lives and tier 0.
+  // Mid-level pause updates carry (+snap) only; entry never ratchets upward from kills in the current attempt.
+  function cloneRes(c) { return { lives: c.lives, tier: c.tier, score: c.score }; }
+  function entryClone(run) { return (run.entry || run.carry).map(cloneRes); }
+  function retryClone(run) {
+    return (run.entry || run.carry).map(function (c) { return { lives: E.DIFF[run.difficulty].lives, tier: 0, score: c.score }; });
   }
   function startLevel(level, carry, twoP, diff, attempt) {
     st.twoP = twoP; attempt = attempt || 0;
     var seed = (level + 1) * 7919 + attempt * 104729 + (twoP ? 13 : 0);
     st.g = E.newGame({ level: level, difficulty: diff, twoP: twoP, carry: carry, seed: seed }); R.invalidate();
-    // entry = resources at level start (Restart rolls back here). carry tracks mid-level Continue state separately.
-    var entry = E.carry(st.g);
-    data.run = { level: level, difficulty: st.g.diff, twoP: twoP, attempt: attempt, carry: entry.map(function (c) { return { lives: c.lives, tier: c.tier, score: c.score }; }), entry: entry, snap: null }; save();
+    var started = E.carry(st.g).map(cloneRes);
+    data.run = { level: level, difficulty: st.g.diff, twoP: twoP, attempt: attempt, carry: started.map(cloneRes), entry: started, snap: null }; save();
     st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start');
   }
   function overlay(title, text, btns) {
@@ -156,10 +163,16 @@
     if (g.status === 'won') {
       A.sfx('win');
       if (g.level + 1 >= E.LEVELS.length) { data.run = null; save(); overlay('You won!', 'You cleared all ' + E.LEVELS.length + ' levels and kept the bird safe. Score: ' + score + '. Great teamwork!', [['Play Again', 'play', 'big'], ['Home', 'home', 'back']]); return; }
-      var nx = E.carry(g); data.run = { level: g.level + 1, difficulty: g.diff, twoP: g.twoP, attempt: 0, carry: nx, entry: nx.map(function (c) { return { lives: c.lives, tier: c.tier, score: c.score }; }), snap: null }; save();
+      var nx = E.carry(g).map(cloneRes); data.run = { level: g.level + 1, difficulty: g.diff, twoP: g.twoP, attempt: 0, carry: nx.map(cloneRes), entry: nx, snap: null }; save();
       overlay('Level Clear!', g.name + ' is safe. Score: ' + score + '.', [['Next Level', 'next', 'big'], ['Home', 'home', 'back']]);
     } else {
-      A.sfx('lose'); if (data.run) data.run.snap = null; save();
+      A.sfx('lose');
+      if (data.run) {
+        data.run.snap = null;
+        // Drop mid-attempt carry so Home → Continue after a loss cannot bank replayed points (same baseline as Try Again).
+        data.run.carry = retryClone(data.run);
+      }
+      save();
       overlay(g.reason === 'bird' ? 'The bird was hit!' : 'Out of tanks!', 'Nice try! Try level ' + (g.level + 1) + ' again with full lives.', [['Try Again', 'retry', 'big'], ['Home', 'home', 'back']]);
     }
   }

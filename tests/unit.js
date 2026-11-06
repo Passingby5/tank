@@ -270,4 +270,15 @@ ok('enemy quotas are 20 on L1-5, 25 on L6-14, 30 on L15-22 for every difficulty'
   }
   assert.strictEqual(badFinite, 0, 'nonfinite tanks after mangled restore');
   ok('malformed-state fuzz: accepted restores stay finite (' + accepted + ' accepted mangled/valid cases)'); }
+
+// v8: level-entry carry used for retry baseline (full lives, entry score) vs mid carry
+{ const entry = [{ lives: 5, tier: 1, score: 2400 }];
+  const mid = [{ lives: 2, tier: 3, score: 3100 }];
+  const retry = entry.map(c => ({ lives: E.DIFF.hard.lives, tier: 0, score: c.score }));
+  assert.strictEqual(retry[0].lives, 6); assert.strictEqual(retry[0].tier, 0); assert.strictEqual(retry[0].score, 2400);
+  const g = E.newGame({ level: 1, difficulty: 'hard', carry: retry, seed: 1 });
+  assert.strictEqual(g.players[0].score, 2400); assert.strictEqual(g.players[0].lives, 6); assert.strictEqual(g.players[0].tier, 0);
+  const cont = E.newGame({ level: 1, difficulty: 'hard', carry: mid, seed: 2 });
+  assert.strictEqual(cont.players[0].score, 3100); // mid still valid for Continue snap path
+  ok('v8 retry baseline = entry score + full lives + tier 0; mid carry remains for Continue'); }
 console.log(n + ' unit tests passed');

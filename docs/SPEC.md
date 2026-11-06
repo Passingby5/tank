@@ -88,3 +88,9 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 - Snapshot restore uses own-property enum checks for difficulty, directions and enemy types (rejects `constructor` / inherited names). Bird HP cannot exceed birdMax. Living enemies cannot outnumber spawned. Enemy HP cannot exceed type max.
 - Genuine older mid-level snapshots (including overdue `spawnT` below -5) restore via migration: spawnT floors at 0, leftover free fortStart steel is capped to 16s shovel duration, and queues remapped to the current level quota while keeping already-spawned progress. Documented transition: old free-steel remainder and 15/18 quotas do not carry into new rules unchanged.
 - Restart Level rolls score/lives/gun back to the **level-entry** checkpoint (`run.entry`), not the mid-attempt `carry`. Continue still resumes the mid-level snapshot. Best score still updates only on natural level outcomes. Pre-v7 saves synthesize entry from carry once.
+
+## v8 additions (QA v7 R7-1)
+- Level-entry `run.entry` is an immutable checkpoint for the current level attempt (cloned at start / Next). Pause may update mid-level `carry` and `snap` only.
+- Try Again and post-loss Home→Continue (no snap) restart from **entry score** with full lives and tier 0 — never from mid-level paused carry — so Pause→Resume→lose→retry cannot bank replayed enemy points into Best or the next level.
+- Restart Level still restores entry lives/tier/score as-is. Natural wins still carry legitimate score into the next level's entry. Difficulty unchanged.
+

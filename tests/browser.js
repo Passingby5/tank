@@ -40,7 +40,7 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
       assert(!r.over, vp.name + ' page scrolls at ' + where); assert.deepStrictEqual(r.small, [], vp.name + ' small targets at ' + where); assert.deepStrictEqual(r.clash, [], vp.name + ' overlaps at ' + where); assert.deepStrictEqual(r.offscreen, [], vp.name + ' off screen at ' + where); assert.deepStrictEqual(r.tight, [], vp.name + ' FIRE closer than 16 px to the D-pad at ' + where); if (r.gap !== Infinity) gaps.push(where + ' ' + r.gap.toFixed(0));
     };
     await page.goto(base, { waitUntil: 'load' }); await page.waitForTimeout(400);
-    const label = await page.textContent('#ver'); assert(/^v7 - Nov 6 - \w{7}$/.test(label), 'label ' + label);
+    const label = await page.textContent('#ver'); assert(/^v8 - Nov 6 - \w{7}$/.test(label), 'label ' + label);
     if (!single && full) { const v = await (await page.request.get(base + 'version.json?t=' + Date.now())).json(); assert.strictEqual(label, v.label);
       const sw = await page.evaluate(async () => { const r = await navigator.serviceWorker.ready; return !!r.active; }); assert(sw); ok(vp.name + ' version label "' + label + '" matches version.json; service worker active'); }
     else ok(vp.name + ' version label "' + label + '"');
@@ -173,6 +173,22 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
       assert.strictEqual(rs.lives, entryBefore.lives); assert.strictEqual(rs.tier, entryBefore.tier);
       assert.strictEqual(rs.bird, rs.birdMax); assert.strictEqual(rs.bird, 3); assert(rs.attempt >= 1); assert.strictEqual(rs.killed, 0);
       ok(vp.name + ' Restart Level rolls back to level-entry score/lives/gun, restores bird to 3, bumps attempt');
+      // Try Again after Pause mid-score must restore entry score (R7-1), not mid carry
+      const entryTry = await page.evaluate(() => { const e = TK.UI.state().save.run.entry[0]; return { score: e.score, lives: e.lives }; });
+      await page.evaluate((entryTry) => { const g = TK.UI.game(); g.players[0].score = entryTry.score + 1100; g.players[0].lives = 3; g.players[0].tier = 2; }, entryTry);
+      await page.click('[data-act=pause]'); await page.waitForTimeout(250);
+      await tap('#ov [data-act=resume]');
+      await page.evaluate(() => { const g = TK.UI.game(), E = TK.Engine; E.FORT.forEach(c => g.map[c[1]][c[0]] = 0); g.mapVer++; g.birdHp = 1; g.spawnT = 999;
+        g.enemies = [{ id: 88, kind: 'enemy', type: 'b', x: 6, y: 10.6, dir: 'd', hp: 1, maxHp: 1, alive: true, spawning: 0, spawnSafe: 99, bonus: false, think: 99, cool: 99, stuckT: 0, lx: 6, ly: 10.6, tread: 0, hitT: 0 }];
+        g.players[0].x = 1; g.players[0].y = 1; E.fire(g, g.enemies[0], 9, false, 1); });
+      await page.waitForTimeout(2600);
+      assert.strictEqual(await page.textContent('#ovTitle'), 'The bird was hit!');
+      await tap('#ov [data-act=retry]');
+      const afterTry = await page.evaluate(() => { const g = TK.UI.game(), run = TK.UI.state().save.run; return { score: g.players[0].score, lives: g.players[0].lives, tier: g.players[0].tier, entry: run.entry[0].score }; });
+      assert.strictEqual(afterTry.score, entryTry.score, 'Try Again must use entry score not mid carry');
+      assert.strictEqual(afterTry.entry, entryTry.score);
+      assert.strictEqual(afterTry.lives, 6); assert.strictEqual(afterTry.tier, 0);
+      ok(vp.name + ' Pause→Resume→lose→Try Again restores entry score with full lives (no replay bank)');
       // Late / final level smoke: start L21 and L22, step briefly with touch fire, no throw
       for (const L of [20, 21]) {
         await page.evaluate(L => { TK.UI.start(L, null, false, 'hard', 0); }, L);
