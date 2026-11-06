@@ -82,3 +82,9 @@ Crisp, modern 2D art drawn in code on a canvas sized to the screen's devicePixel
 ## v6 additions (QA v5 M1)
 - Mid-level snapshot restore rejects non-integer or out-of-range spawned/killed/gate/birdHp and impossible cross-field values. Continue falls back to a clean level start when restore returns null.
 - Equal-danger spawn gate ties keep the shuffled order (no fixed left-gate bias).
+
+
+## v7 additions (QA v6 L1/R1/C1)
+- Snapshot restore uses own-property enum checks for difficulty, directions and enemy types (rejects `constructor` / inherited names). Bird HP cannot exceed birdMax. Living enemies cannot outnumber spawned. Enemy HP cannot exceed type max.
+- Genuine older mid-level snapshots (including overdue `spawnT` below -5) restore via migration: spawnT floors at 0, leftover free fortStart steel is capped to 16s shovel duration, and queues remapped to the current level quota while keeping already-spawned progress. Documented transition: old free-steel remainder and 15/18 quotas do not carry into new rules unchanged.
+- Restart Level rolls score/lives/gun back to the **level-entry** checkpoint (`run.entry`), not the mid-attempt `carry`. Continue still resumes the mid-level snapshot. Best score still updates only on natural level outcomes. Pre-v7 saves synthesize entry from carry once.

@@ -16,3 +16,7 @@ A small top-down tank game for phones and computers. Guard the bird, clear 22 le
 
 ## Difficulty
 Hard is the default on a brand-new install; an existing saved Easy/Medium choice is kept. The bird fort starts as brick; shovel steels it for about 16 seconds. Enemy quotas are 20 / 25 / 30 by level band. `npm test` checks fort/spawn/anti-camp rules, and advanced fair-play sims (camp vs mobile), not the old kid-win ease gates.
+
+
+## Saves (v7)
+Restart Level restores the score, lives and gun you had when the level began. Continue still resumes a mid-level snapshot. Older mid-level saves migrate overdue spawn timers and cap leftover free fort steel to a normal shovel.

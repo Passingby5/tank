@@ -358,40 +358,79 @@
       enemies: g.enemies.filter(function (e) { return e.alive; }).map(function (e) { return { id: e.id, type: e.type, x: e.x, y: e.y, dir: e.dir, hp: e.hp, spawning: e.spawning, spawnSafe: e.spawnSafe || 0, bonus: e.bonus, sprint: !!e.sprint, exitBoost: Math.max(0, e.exitBoost || 0), think: e.think, cool: e.cool }; }) };
     NUMS.forEach(function (k) { o[k] = g[k]; }); if (o.spawnT < 0) o.spawnT = 0; if (o.shovelT < 0) o.shovelT = 0; if (o.freezeT < 0) o.freezeT = 0; return o;
   }
+  function own(obj, key) { return Object.prototype.hasOwnProperty.call(obj, key); }
+  // v7: migrate genuine older mid-level snaps onto current rules without free-steel or wrong quotas.
+  // Overdue spawn timers (cap-full idle) normalize to 0. Old free fortStart remainders are capped to shovel length (16s).
+  // Queues that do not match the current level quota are remapped while keeping already-spawned progress.
+  function migrateLegacySnap(o, g) {
+    var note = [];
+    if (typeof o.spawnT === 'number' && isFinite(o.spawnT) && o.spawnT < 0) { o.spawnT = 0; note.push('spawnT'); }
+    if (typeof o.shovelT === 'number' && isFinite(o.shovelT) && o.shovelT > 16) { o.shovelT = 16; note.push('shovelCap'); }
+    var quota = levelQuota(g.level), q = (typeof o.queue === 'string' ? o.queue : '').split('');
+    if (q.length && q.length !== quota && /^[bfra]+$/.test(o.queue)) {
+      var spawned = Math.max(0, Math.min(q.length, Math.floor(Number(o.spawned) || 0)));
+      var seen = q.slice(0, spawned), rest = q.slice(spawned), nq = seen.slice();
+      while (nq.length < quota) nq.push(rest.length ? rest.shift() : 'b');
+      while (nq.length > quota) { if (nq.length > spawned) nq.pop(); else break; }
+      o.queue = nq.join('');
+      o.spawned = Math.min(spawned, nq.length);
+      if (typeof o.killed === 'number' && o.killed > o.spawned) o.killed = o.spawned;
+      note.push('queue');
+    }
+    g.migrated = note.length ? note : null;
+    return o;
+  }
   function restore(o) {
     try {
       var fin = function (v, lo, hi) { if (typeof v !== 'number' || !isFinite(v) || v < lo || v > hi) throw 0; return v; };
       var jint = function (v, lo, hi) { var n = fin(v, lo, hi); if (Math.floor(n) !== n) throw 0; return n; };
-      var pos = function (v) { return Math.max(0, Math.min(12, fin(v, -0.5, 12.5))); };
-      var DIR = function (d) { if (!DIRS[d]) throw 0; return d; };
-      if (!o || o.v !== 1 || !DIFF[o.diff] || typeof o.twoP !== 'boolean') return null;
+      var pos = function (v) { var n = fin(v, -0.5, 12.5); return Math.max(0, Math.min(12, n)); };
+      var DIR = function (d) { if (typeof d !== 'string' || !own(DIRS, d)) throw 0; return d; };
+      if (!o || o.v !== 1 || typeof o.diff !== 'string' || !own(DIFF, o.diff) || typeof o.twoP !== 'boolean') return null;
       var g = newGame({ level: jint(o.level, 0, LV.LEVELS.length - 1), difficulty: o.diff, twoP: o.twoP, seed: 1 });
+      o = migrateLegacySnap(Object.assign({}, o), g);
       if (!Array.isArray(o.map) || o.map.length !== H) return null;
       g.map = o.map.map(function (r) { if (typeof r !== 'string' || !/^[0-6]{26}$/.test(r)) throw 0; return r.split('').map(Number); });
       if (typeof o.queue !== 'string' || !/^[bfra]{1,40}$/.test(o.queue)) return null; g.queue = o.queue.split('');
       if (!Array.isArray(o.bonusAt) || o.bonusAt.length > 5) return null; g.bonusAt = o.bonusAt.map(function (v) { return jint(v, 0, 40); });
-      // Per-field ranges (QA M1): spawned must be a nonnegative integer index into the queue.
       g.t = fin(o.t, 0, 1e7);
       g.freezeT = fin(o.freezeT, 0, 1e6);
-      g.shovelT = fin(o.shovelT, 0, 120);
-      g.spawnT = fin(o.spawnT, -5, 1e6);
+      g.shovelT = fin(o.shovelT, 0, 16); // shovel power only; old free fortStart remainders already capped in migrate
+      g.spawnT = fin(o.spawnT, 0, 1e6); // overdue timers normalized in migrate
       g.gate = jint(o.gate, 0, 2);
       g.spawned = jint(o.spawned, 0, g.queue.length);
       g.killed = jint(o.killed, 0, g.queue.length);
       g.nextId = jint(o.nextId, 1, 1e6);
-      g.birdHp = jint(o.birdHp, 1, 9);
+      g.birdHp = jint(o.birdHp, 1, g.birdMax);
       g.seed = jint(o.seed, -2147483648, 2147483647);
       if (g.killed > g.spawned) throw 0;
-      if (g.birdHp > Math.max(g.birdMax || 0, 9)) throw 0;
       g.birdAlive = o.birdAlive === true; if (!g.birdAlive || g.birdHp < 1) return null;
       if (!Array.isArray(o.players) || o.players.length !== g.players.length) return null;
-      o.players.forEach(function (q, i) { var p = g.players[i]; p.x = pos(q.x); p.y = pos(q.y); p.dir = DIR(q.dir); p.lives = fin(q.lives, 0, 9) | 0; p.tier = fin(q.tier, 0, 3) | 0; p.score = fin(q.score, 0, 1e8) | 0;
-        p.alive = q.alive === true; p.out = q.out === true; p.shieldT = Math.max(fin(q.shieldT, 0, 99), 2); p.respawnT = fin(q.respawnT, -1e6, 9); p.kills = fin(q.kills, 0, 999) | 0; });
+      o.players.forEach(function (q, i) {
+        var p = g.players[i];
+        p.x = pos(q.x); p.y = pos(q.y); p.dir = DIR(q.dir);
+        p.lives = jint(q.lives, 0, 9); p.tier = jint(q.tier, 0, 3); p.score = jint(q.score, 0, 1e8);
+        p.alive = q.alive === true; p.out = q.out === true;
+        p.shieldT = Math.max(fin(q.shieldT, 0, 99), 0); p.respawnT = fin(q.respawnT, -1e6, 9); p.kills = jint(q.kills, 0, 999);
+        if (!isFinite(p.x) || !isFinite(p.y)) throw 0;
+      });
       if (!Array.isArray(o.enemies) || o.enemies.length > 8) return null;
-      g.enemies = o.enemies.map(function (q) { if (!TYPES[q.type]) throw 0; return { id: fin(q.id, 0, 1e6), kind: 'enemy', type: q.type, x: pos(q.x), y: pos(q.y), dir: DIR(q.dir), hp: fin(q.hp, 1, 4) | 0, maxHp: TYPES[q.type].hp, alive: true,
-        spawning: fin(q.spawning, 0, 2), spawnSafe: Math.max(fin(q.spawnSafe, -1e6, 1e6), 1), bonus: q.bonus === true, sprint: q.sprint === true, exitBoost: Math.max(0, fin(q.exitBoost == null ? 0 : q.exitBoost, -1, 5)),
-        think: fin(q.think, -1e6, 1e6), cool: Math.max(fin(q.cool, -1e6, 1e6), 1), stuckT: 0, lx: q.x, ly: q.y, tread: 0, moving: false, hitT: 0 }; });
-      if (o.power) { if (POWERS.indexOf(o.power.kind) < 0) return null; g.power = { kind: o.power.kind, x: pos(o.power.x), y: pos(o.power.y), t: fin(o.power.t, 0, 30) }; }
+      if (o.enemies.length > g.spawned) throw 0;
+      var seenId = {};
+      g.enemies = o.enemies.map(function (q) {
+        if (typeof q.type !== 'string' || !own(TYPES, q.type)) throw 0;
+        var id = jint(q.id, 0, 1e6); if (seenId[id]) throw 0; seenId[id] = 1;
+        var hpMax = TYPES[q.type].hp, hp = jint(q.hp, 1, hpMax);
+        var e = { id: id, kind: 'enemy', type: q.type, x: pos(q.x), y: pos(q.y), dir: DIR(q.dir), hp: hp, maxHp: hpMax, alive: true,
+          spawning: fin(q.spawning, 0, 2), spawnSafe: Math.max(fin(q.spawnSafe, -1e6, 1e6), 0), bonus: q.bonus === true, sprint: q.sprint === true,
+          exitBoost: Math.max(0, fin(q.exitBoost == null ? 0 : q.exitBoost, -1, 5)),
+          think: fin(q.think, -1e6, 1e6), cool: Math.max(fin(q.cool, -1e6, 1e6), 0), stuckT: 0, lx: pos(q.x), ly: pos(q.y), tread: 0, moving: false, hitT: 0 };
+        if (!isFinite(e.x) || !isFinite(e.y)) throw 0;
+        return e;
+      });
+      if (o.power) { if (typeof o.power.kind !== 'string' || POWERS.indexOf(o.power.kind) < 0) return null; g.power = { kind: o.power.kind, x: pos(o.power.x), y: pos(o.power.y), t: fin(o.power.t, 0, 30) }; }
+      // Only adjust fort tiles when we capped an old free fortStart remainder. Never rebuild chipped fort on ordinary restores.
+      if (g.migrated && g.migrated.indexOf('shovelCap') >= 0) setFort(g, g.shovelT > 0 ? STEEL : BRICK);
       g.bullets = []; g.mapVer = nextVer(); return g;
     } catch (e) { return null; }
   }

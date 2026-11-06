@@ -40,7 +40,7 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
       assert(!r.over, vp.name + ' page scrolls at ' + where); assert.deepStrictEqual(r.small, [], vp.name + ' small targets at ' + where); assert.deepStrictEqual(r.clash, [], vp.name + ' overlaps at ' + where); assert.deepStrictEqual(r.offscreen, [], vp.name + ' off screen at ' + where); assert.deepStrictEqual(r.tight, [], vp.name + ' FIRE closer than 16 px to the D-pad at ' + where); if (r.gap !== Infinity) gaps.push(where + ' ' + r.gap.toFixed(0));
     };
     await page.goto(base, { waitUntil: 'load' }); await page.waitForTimeout(400);
-    const label = await page.textContent('#ver'); assert(/^v6 - Nov 6 - \w{7}$/.test(label), 'label ' + label);
+    const label = await page.textContent('#ver'); assert(/^v7 - Nov 6 - \w{7}$/.test(label), 'label ' + label);
     if (!single && full) { const v = await (await page.request.get(base + 'version.json?t=' + Date.now())).json(); assert.strictEqual(label, v.label);
       const sw = await page.evaluate(async () => { const r = await navigator.serviceWorker.ready; return !!r.active; }); assert(sw); ok(vp.name + ' version label "' + label + '" matches version.json; service worker active'); }
     else ok(vp.name + ' version label "' + label + '"');
@@ -226,7 +226,7 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
     await page.evaluate(() => { TK.UI.game().players.forEach(q => q.cool = 0); }); await page.keyboard.press('Space'); await page.keyboard.press('Enter'); await page.waitForTimeout(30); const nb = await page.evaluate(() => TK.UI.game().bullets.filter(b => b.side === 'p').map(b => b.owner.id).sort().join()); assert.strictEqual(nb, '0,1');
     await page.keyboard.press('KeyP'); assert.strictEqual((await page.evaluate(() => TK.UI.state())).paused, true); await page.keyboard.press('Escape'); assert.strictEqual((await page.evaluate(() => TK.UI.state())).paused, false);
     ok('desktop keyboard: W A S D + Space for player 1, arrows + Enter for player 2, P and Escape pause and resume');
-    if (!single) { await ctx.setOffline(true); await page.reload(); await page.waitForTimeout(500); assert(/^v6/.test(await page.textContent('#ver'))); await page.click('#btnPlay'); await page.waitForTimeout(400); assert.strictEqual((await page.evaluate(() => TK.UI.state())).screen, 'play'); await ctx.setOffline(false); ok('offline: page reloads from the service worker cache and plays');
+    if (!single) { await ctx.setOffline(true); await page.reload(); await page.waitForTimeout(500); assert(/^v7/.test(await page.textContent('#ver'))); await page.click('#btnPlay'); await page.waitForTimeout(400); assert.strictEqual((await page.evaluate(() => TK.UI.state())).screen, 'play'); await ctx.setOffline(false); ok('offline: page reloads from the service worker cache and plays');
       const man = await (await page.request.get(base + 'manifest.webmanifest')).json(); assert(man.icons.length >= 4 && man.display === 'standalone'); const sw = await (await page.request.get(base + 'sw.js')).text(); assert(/NETWORK-FIRST/.test(sw) && /skipWaiting/.test(sw)); ok('manifest with icons; network-first, self-updating service worker'); }
     assert.deepStrictEqual(errors.filter(e => !/ERR_INTERNET_DISCONNECTED|Failed to load resource/.test(e)), []); ok('desktop 0 console errors'); await ctx.close(); }
   await browser.close(); if (server) server.close();

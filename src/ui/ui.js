@@ -121,7 +121,7 @@
       case 'home': st.g = null; R.invalidate(); st.paused = false; show('home'); break;
       case 'pause': pause(); break;
       case 'resume': resume(); break;
-      case 'restart': var r = data.run; if (r) startLevel(r.level, r.carry, r.twoP, r.difficulty, r.attempt + 1); break;
+      case 'restart': var r = data.run; if (r) { var entry = r.entry || r.carry; startLevel(r.level, entry.map(function (c) { return { lives: c.lives, tier: c.tier, score: c.score }; }), r.twoP, r.difficulty, r.attempt + 1); } break;
       case 'next': if (data.run) startLevel(data.run.level, data.run.carry, data.run.twoP, data.run.difficulty, 0); break;
       case 'retry': var q = data.run; if (q) startLevel(q.level, q.carry.map(function (c) { return { lives: E.DIFF[q.difficulty].lives, tier: 0, score: c.score }; }), q.twoP, q.difficulty, q.attempt + 1); break;
     }
@@ -130,7 +130,9 @@
     st.twoP = twoP; attempt = attempt || 0;
     var seed = (level + 1) * 7919 + attempt * 104729 + (twoP ? 13 : 0);
     st.g = E.newGame({ level: level, difficulty: diff, twoP: twoP, carry: carry, seed: seed }); R.invalidate();
-    data.run = { level: level, difficulty: st.g.diff, twoP: twoP, attempt: attempt, carry: E.carry(st.g), snap: null }; save();
+    // entry = resources at level start (Restart rolls back here). carry tracks mid-level Continue state separately.
+    var entry = E.carry(st.g);
+    data.run = { level: level, difficulty: st.g.diff, twoP: twoP, attempt: attempt, carry: entry.map(function (c) { return { lives: c.lives, tier: c.tier, score: c.score }; }), entry: entry, snap: null }; save();
     st.paused = false; st.handled = false; keys = [[], []]; guardBack(); show('play'); A.sfx('start');
   }
   function overlay(title, text, btns) {
@@ -144,7 +146,7 @@
     saveHere();
     overlay('Paused', 'Saved right here. Level ' + (st.g.level + 1) + ': ' + st.g.name + '.', [['Resume', 'resume', 'big'], ['Restart Level', 'restart'], ['Home', 'home', 'back']]);
   }
-  function saveHere() { if (st.g && st.g.status === 'play' && data.run) { data.run.snap = E.snapshot(st.g); data.run.carry = E.carry(st.g); } save(); }
+  function saveHere() { if (st.g && st.g.status === 'play' && data.run) { data.run.snap = E.snapshot(st.g); data.run.carry = E.carry(st.g); /* keep data.run.entry = level-start checkpoint */ } save(); }
   root.addEventListener('pagehide', function () { if (st.g) saveHere(); });
   function resume() { if (!st.g) { st.paused = false; show('home'); return; } st.paused = false; show('play'); }
   document.addEventListener('visibilitychange', function () { if (document.visibilityState === 'hidden' && st.screen === 'play') pause(); });
@@ -154,7 +156,7 @@
     if (g.status === 'won') {
       A.sfx('win');
       if (g.level + 1 >= E.LEVELS.length) { data.run = null; save(); overlay('You won!', 'You cleared all ' + E.LEVELS.length + ' levels and kept the bird safe. Score: ' + score + '. Great teamwork!', [['Play Again', 'play', 'big'], ['Home', 'home', 'back']]); return; }
-      data.run = { level: g.level + 1, difficulty: g.diff, twoP: g.twoP, attempt: 0, carry: E.carry(g), snap: null }; save();
+      var nx = E.carry(g); data.run = { level: g.level + 1, difficulty: g.diff, twoP: g.twoP, attempt: 0, carry: nx, entry: nx.map(function (c) { return { lives: c.lives, tier: c.tier, score: c.score }; }), snap: null }; save();
       overlay('Level Clear!', g.name + ' is safe. Score: ' + score + '.', [['Next Level', 'next', 'big'], ['Home', 'home', 'back']]);
     } else {
       A.sfx('lose'); if (data.run) data.run.snap = null; save();

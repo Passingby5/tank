@@ -95,7 +95,7 @@ ok('enemy quotas are 20 on L1-5, 25 on L6-14, 30 on L15-22 for every difficulty'
 { const g = blank(), p = g.players[0]; p.x = 4; p.y = 8; p.dir = 'u'; g.map[14][9] = E.BRICK; run(g, 0.5, [{ dir: 'u' }]); assert.strictEqual(p.y, 7.5); assert.strictEqual(p.x, 4); ok('tanks stop flush against walls and never enter them'); }
 // 25. saves
 { const mem = () => { const m = {}; return { getItem: k => (k in m ? m[k] : null), setItem: (k, v) => { m[k] = String(v); }, m }; };
-  const st = mem(); let d = S.read(st, 22); assert.strictEqual(d.run, null); assert.strictEqual(d.settings.difficulty, 'hard'); assert.strictEqual(S.VERSION, 3);
+  const st = mem(); let d = S.read(st, 22); assert.strictEqual(d.run, null); assert.strictEqual(d.settings.difficulty, 'hard'); assert.strictEqual(S.VERSION, 4);
   st.setItem(S.KEY, JSON.stringify({ v: 2, run: null, best: 10, settings: { muted: false, difficulty: 'easy' } }));
   assert.strictEqual(S.read(st, 22).settings.difficulty, 'easy', 'preserves saved Easy from v2');
   d.run = { level: 4, difficulty: 'hard', twoP: true, attempt: 2, carry: [{ lives: 2, tier: 1, score: 900 }, { lives: 3, tier: 0, score: 100 }] }; d.settings.muted = true; S.write(st, d);
@@ -204,4 +204,70 @@ ok('enemy quotas are 20 on L1-5, 25 on L6-14, 30 on L15-22 for every difficulty'
   assert(counts[0] > 400 && counts[2] > 400, 'side gates underused ' + counts); assert(counts[1] < counts[0] && counts[1] < counts[2], 'middle should be avoided when camping ' + counts);
   const ratio = counts[0] / Math.max(1, counts[2]); assert(ratio > 0.55 && ratio < 1.8, 'side gates should be roughly balanced when equally safe ' + counts);
   ok('anti-camp avoids the camped middle gate and keeps left/right variety on equal-danger ties'); }
+
+// v7 L1: genuine v4 overdue-timer fixtures restore with migration
+{ const fs = require('fs'), path = '/workspace/qa/tank-v6/fixtures';
+  const files = fs.readdirSync(path).filter(f => f.startsWith('v4-'));
+  assert(files.length >= 48, 'need v4 fixtures');
+  let n = 0;
+  for (const f of files) {
+    const s = JSON.parse(fs.readFileSync(path + '/' + f));
+    const r = E.restore(s);
+    assert(r, 'legacy restore failed ' + f + ' spawnT=' + s.spawnT);
+    assert(r.spawnT >= 0); assert(r.shovelT <= 16 + 1e-9);
+    assert.strictEqual(r.queue.length, E.levelQuota(r.level));
+    for (let i = 0; i < 30; i++) E.step(r, idle, F);
+    assert(r.status === 'play' || r.status === 'won' || r.status === 'lost');
+    n++;
+  }
+  ok('all ' + n + ' genuine v4 mid-level fixtures restore (overdue spawnT migrated; shovel capped; queue remapped to current quota)'); }
+// v7 C1: inherited enum names and unknown types rejected; no NaN enemies
+{ const fs = require('fs'); const base = JSON.parse(fs.readFileSync('/workspace/qa/tank-v6/fixtures/v6-valid.json'));
+  for (const bad of ['constructor', 'toString', '__proto__', 'valueOf', 'x', '']) {
+    const s = JSON.parse(JSON.stringify(base)); s.enemies[0].type = bad;
+    assert.strictEqual(E.restore(s), null, 'type ' + bad);
+  }
+  for (const bad of ['constructor', 'toString', '__proto__']) {
+    const s = JSON.parse(JSON.stringify(base)); s.diff = bad;
+    assert.strictEqual(E.restore(s), null, 'diff ' + bad);
+  }
+  { const s = JSON.parse(JSON.stringify(base)); s.players[0].dir = 'constructor'; assert.strictEqual(E.restore(s), null); }
+  { const s = JSON.parse(JSON.stringify(base)); s.birdHp = 9; assert.strictEqual(E.restore(s), null, 'birdHp above birdMax'); }
+  ok('malformed enemy/difficulty/direction enums and over-max birdHp are rejected'); }
+// v7 R1: Restart rolls back to level-entry score/lives/gun, not mid-attempt carry
+{ const entry = [{ lives: 6, tier: 0, score: 500 }];
+  const mid = [{ lives: 4, tier: 2, score: 2500 }];
+  // simulate start with entry, then a mid-level carry that Restart must ignore
+  const a = E.newGame({ level: 0, difficulty: 'hard', carry: entry, seed: 1 });
+  assert.strictEqual(a.players[0].score, 500);
+  const b = E.newGame({ level: 0, difficulty: 'hard', carry: entry, seed: 2 }); // restart with entry, new seed
+  assert.strictEqual(b.players[0].score, 500); assert.strictEqual(b.players[0].lives, 6); assert.strictEqual(b.players[0].tier, 0);
+  assert.notStrictEqual(a.queue.join(''), b.queue.join(''));
+  const farm = E.newGame({ level: 0, difficulty: 'hard', carry: mid, seed: 3 });
+  assert.strictEqual(farm.players[0].score, 2500); // carry still works for Continue / Next
+  ok('Restart uses level-entry resources (score/lives/gun); mid-level carry remains for Continue/Next only'); }
+// v7 fuzz: random mangled snapshots never produce non-finite tank positions
+{ let accepted = 0, badFinite = 0;
+  for (let i = 0; i < 800; i++) {
+    const g0 = E.newGame({ level: i % 22, difficulty: ['easy','medium','hard'][i % 3], seed: 9000 + i });
+    for (let k = 0; k < (i % 40); k++) E.step(g0, [{ dir: 'urdl'[k % 4], fire: k % 11 === 0 }], F);
+    if (g0.status !== 'play') continue;
+    const s = JSON.parse(JSON.stringify(E.snapshot(g0)));
+    const mode = i % 7;
+    if (mode === 0) s.spawned = -1;
+    else if (mode === 1) s.enemies[0] && (s.enemies[0].type = 'constructor');
+    else if (mode === 2) s.diff = 'toString';
+    else if (mode === 3) s.players[0].dir = '__proto__';
+    else if (mode === 4) s.birdHp = 99;
+    else if (mode === 5) { s.spawnT = -50; /* should migrate if otherwise valid */ }
+    else if (mode === 6 && s.enemies[0]) s.enemies[0].hp = 99;
+    const r = E.restore(s);
+    if (!r) continue;
+    accepted++;
+    for (let k = 0; k < 45; k++) E.step(r, [{ fire: false }], F);
+    const tanks = r.players.concat(r.enemies);
+    if (tanks.some(t => !Number.isFinite(t.x) || !Number.isFinite(t.y))) badFinite++;
+  }
+  assert.strictEqual(badFinite, 0, 'nonfinite tanks after mangled restore');
+  ok('malformed-state fuzz: accepted restores stay finite (' + accepted + ' accepted mangled/valid cases)'); }
 console.log(n + ' unit tests passed');
