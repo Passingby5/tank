@@ -162,14 +162,17 @@ let passed = 0; const ok = m => { passed++; console.log('ok', m); };
       await page.waitForTimeout(250);
       sh = await page.evaluate(() => { const g = TK.UI.game(), E = TK.Engine; return { t: g.shovelT, brick: E.FORT.every(c => g.map[c[1]][c[0]] === E.BRICK) }; });
       assert(sh.t === 0 && sh.brick, 'shovel expiry ' + JSON.stringify(sh)); ok(vp.name + ' shovel pickup steels the fort then restores brick after ~16s');
-      // Restart Level keeps score/lives, restores bird, new attempt seed
-      await page.evaluate(() => { const g = TK.UI.game(); g.players[0].score = 777; g.players[0].lives = 4; g.players[0].tier = 2; g.birdHp = 1; });
+      // Restart Level rolls back to level-entry score/lives/gun (anti-farm), restores bird, new attempt seed
+      const entryBefore = await page.evaluate(() => { const e = TK.UI.state().save.run.entry[0]; return { score: e.score, lives: e.lives, tier: e.tier }; });
+      await page.evaluate((entryBefore) => { const g = TK.UI.game(); g.players[0].score = entryBefore.score + 777; g.players[0].lives = Math.max(1, entryBefore.lives - 2); g.players[0].tier = 2; g.birdHp = 1; g.killed = Math.max(g.killed, 1); }, entryBefore);
       await page.click('[data-act=pause]'); await page.waitForTimeout(300);
       await tap('#ov [data-act=restart]');
       s = await S();
-      const rs = await page.evaluate(() => { const g = TK.UI.game(); return { score: g.players[0].score, lives: g.players[0].lives, tier: g.players[0].tier, bird: g.birdHp, birdMax: g.birdMax, attempt: TK.UI.state().save.run.attempt }; });
-      assert.strictEqual(rs.score, 777); assert.strictEqual(rs.lives, 4); assert.strictEqual(rs.tier, 2); assert.strictEqual(rs.bird, rs.birdMax); assert.strictEqual(rs.bird, 3); assert(rs.attempt >= 1);
-      ok(vp.name + ' Restart Level keeps lives/score/gun, restores bird to 3, bumps attempt');
+      const rs = await page.evaluate(() => { const g = TK.UI.game(), run = TK.UI.state().save.run; return { score: g.players[0].score, lives: g.players[0].lives, tier: g.players[0].tier, bird: g.birdHp, birdMax: g.birdMax, attempt: run.attempt, entry: run.entry[0], killed: g.killed }; });
+      assert.strictEqual(rs.score, entryBefore.score, 'restart must roll score back to level entry');
+      assert.strictEqual(rs.lives, entryBefore.lives); assert.strictEqual(rs.tier, entryBefore.tier);
+      assert.strictEqual(rs.bird, rs.birdMax); assert.strictEqual(rs.bird, 3); assert(rs.attempt >= 1); assert.strictEqual(rs.killed, 0);
+      ok(vp.name + ' Restart Level rolls back to level-entry score/lives/gun, restores bird to 3, bumps attempt');
       // Late / final level smoke: start L21 and L22, step briefly with touch fire, no throw
       for (const L of [20, 21]) {
         await page.evaluate(L => { TK.UI.start(L, null, false, 'hard', 0); }, L);
